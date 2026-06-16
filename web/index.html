@@ -1,0 +1,1655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - Gai Admin</title>
+    <link rel="stylesheet" href="/layui/css/layui.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="layui-layout-body">
+    <div class="layui-layout layui-layout-admin">
+        <!-- 顶部导航 -->
+        <div class="layui-header">
+            <div class="layui-logo">
+                <div class="logo-icon"><i class="layui-icon layui-icon-home"></i></div>
+                <span>Gai Admin</span>
+            </div>
+            <ul class="layui-nav top-menu" lay-filter="top-menu">
+                <li class="layui-nav-item layui-this" data-module="dashboard"><a href="javascript:;"><i class="layui-icon layui-icon-chart"></i><cite>数据看板</cite></a></li>
+                <li class="layui-nav-item" data-module="system"><a href="javascript:;"><i class="layui-icon layui-icon-set"></i><cite>系统管理</cite></a></li>
+                <li class="layui-nav-item" data-module="data"><a href="javascript:;"><i class="layui-icon layui-icon-table"></i><cite>数据管理</cite></a></li>
+                <li class="layui-nav-item" data-module="logs"><a href="javascript:;"><i class="layui-icon layui-icon-log"></i><cite>日志管理</cite></a></li>
+            </ul>
+            <ul class="layui-nav layui-layout-right">
+                <li class="layui-nav-item">
+                    <a href="javascript:;">
+                        <img src="https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxko.png" class="layui-nav-img">
+                        <span id="username">Admin</span>
+                    </a>
+                    <dl class="layui-nav-child">
+                        <dd><a href="javascript:;" id="btn-profile">个人中心</a></dd>
+                        <dd><a href="javascript:;" id="btn-password">修改密码</a></dd>
+                        <hr>
+                        <dd><a href="javascript:;" id="btn-logout" style="color: #ff4d4f;">退出登录</a></dd>
+                    </dl>
+                </li>
+            </ul>
+        </div>
+
+        <!-- 左侧菜单 -->
+        <div class="layui-side layui-side-menu">
+            <div class="layui-side-scroll">
+                <div id="side-menu-content"></div>
+            </div>
+        </div>
+
+        <!-- 主体内容 -->
+        <div class="layui-body">
+            <div class="layui-fluid" id="content-area"></div>
+        </div>
+    </div>
+
+    <script src="/layui/layui.js"></script>
+    <script src="/js/common.js"></script>
+    <script>
+    layui.use(['element', 'layer', 'table', 'form', 'laypage'], function(){
+        var element = layui.element;
+        var layer = layui.layer;
+        var table = layui.table;
+        var form = layui.form;
+        var laypage = layui.laypage;
+
+        // 菜单配置
+        var menuConfig = {
+            dashboard: {
+                title: '数据看板',
+                items: [
+                    { name: '首页概览', icon: 'layui-icon-chart', page: 'dashboard' },
+                    { name: '我的通知', icon: 'layui-icon-notice', page: 'notifications' }
+                ]
+            },
+            system: {
+                title: '系统管理',
+                items: [
+                    { name: '用户管理', icon: 'layui-icon-username', page: 'users' },
+                    { name: '角色管理', icon: 'layui-icon-group', page: 'roles' },
+                    { name: '菜单管理', icon: 'layui-icon-menu-fill', page: 'menus' },
+                    { name: '权限管理', icon: 'layui-icon-auz', page: 'permissions' },
+                    { name: '文件管理', icon: 'layui-icon-picture', page: 'uploads' },
+                    { name: '定时任务', icon: 'layui-icon-time', page: 'tasks' },
+                    { name: '系统设置', icon: 'layui-icon-set', page: 'settings' }
+                ]
+            },
+            data: {
+                title: '数据管理',
+                items: [
+                    { name: '数据导出', icon: 'layui-icon-export', page: 'export' },
+                    { name: '数据导入', icon: 'layui-icon-upload-drag', page: 'import' }
+                ]
+            },
+            logs: {
+                title: '日志管理',
+                items: [
+                    { name: '操作日志', icon: 'layui-icon-log', page: 'logs' },
+                    { name: '审计日志', icon: 'layui-icon-read', page: 'audit' }
+                ]
+            }
+        };
+
+        var currentUser = null;
+        var userPermissions = [];
+        var isSuperAdmin = false;
+
+        // HTML 转义，防止 XSS
+    function esc(str) {
+        if (str == null) return '';
+        var div = document.createElement('div');
+        div.textContent = String(str);
+        return div.innerHTML;
+    }
+
+    // ====== 加载当前用户 ======
+        function loadCurrentUser() {
+            var token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+            request('/auth/me').then(function(res) {
+                if (res && res.code === 0 && res.data) {
+                    currentUser = res.data;
+                    document.getElementById('username').textContent = currentUser.username || 'Admin';
+                }
+            }).catch(function() {});
+        }
+
+        // Load user permissions for RBAC
+        function loadPermissions() {
+            request('/auth/permissions').then(function(res) {
+                if (res && res.code === 0 && res.data) {
+                    userPermissions = res.data.permissions || [];
+                    isSuperAdmin = res.data.is_super_admin || false;
+                }
+            }).catch(function() {});
+        }
+
+        // Check if user has permission
+        function hasPerm(code) {
+            if (isSuperAdmin) return true;
+            return userPermissions.indexOf(code) !== -1;
+        }
+
+        // ====== 渲染左侧菜单（纯HTML，不用 layui-nav）======
+        function renderSideMenu(module) {
+            var config = menuConfig[module];
+            if (!config) return;
+
+            var html = '<div class="side-menu-group">' + config.title + '</div>';
+            html += '<ul class="sidebar-menu">';
+            config.items.forEach(function(item) {
+                html += '<li class="sidebar-menu-item" data-page="' + item.page + '">';
+                html += '<i class="layui-icon ' + item.icon + '"></i>';
+                html += '<span>' + item.name + '</span>';
+                html += '</li>';
+            });
+            html += '</ul>';
+
+            var container = document.getElementById('side-menu-content');
+            container.innerHTML = html;
+
+            // 绑定点击事件
+            container.querySelectorAll('.sidebar-menu-item').forEach(function(el) {
+                el.addEventListener('click', function() {
+                    container.querySelectorAll('.sidebar-menu-item').forEach(function(item) {
+                        item.classList.remove('active');
+                    });
+                    this.classList.add('active');
+                    loadPage(this.getAttribute('data-page'));
+                });
+            });
+        }
+
+        // ====== 加载页面内容 ======
+        function loadPage(page) {
+            var contentArea = document.getElementById('content-area');
+            contentArea.innerHTML = '<div style="text-align:center;padding:50px;"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop" style="font-size:30px;"></i></div>';
+
+            switch(page) {
+                case 'dashboard': renderDashboard(contentArea); break;
+                case 'notifications': renderNotifications(contentArea); break;
+                case 'users': renderUsers(contentArea); break;
+                case 'roles': renderRoles(contentArea); break;
+                case 'menus': renderMenus(contentArea); break;
+                case 'permissions': renderPermissions(contentArea); break;
+                case 'tasks': renderTasks(contentArea); break;
+                case 'settings': renderSettings(contentArea); break;
+                case 'export': renderExport(contentArea); break;
+                case 'import': renderImport(contentArea); break;
+                case 'uploads': renderUploads(contentArea); break;
+                case 'logs': renderLogs(contentArea); break;
+                case 'audit': renderAudit(contentArea); break;
+                default: renderDashboard(contentArea);
+            }
+        }
+
+        // ====== 数据看板 ======
+        function renderDashboard(container) {
+            var html = '<div class="welcome-box">';
+            html += '<h2>欢迎回来，' + (currentUser ? currentUser.username : 'Admin') + '</h2>';
+            html += '<p>今天是 ' + new Date().toLocaleDateString('zh-CN') + '，祝您工作愉快！</p>';
+            html += '</div>';
+            html += '<div class="stat-cards">';
+            html += '<div class="stat-card"><div class="stat-icon blue"><i class="layui-icon layui-icon-username"></i></div><div class="stat-info"><div class="stat-value" id="stat-users">-</div><div class="stat-label">用户总数</div></div></div>';
+            html += '<div class="stat-card"><div class="stat-icon green"><i class="layui-icon layui-icon-group"></i></div><div class="stat-info"><div class="stat-value" id="stat-roles">-</div><div class="stat-label">角色总数</div></div></div>';
+            html += '<div class="stat-card"><div class="stat-icon orange"><i class="layui-icon layui-icon-log"></i></div><div class="stat-info"><div class="stat-value" id="stat-logs">-</div><div class="stat-label">今日日志</div></div></div>';
+            html += '<div class="stat-card"><div class="stat-icon purple"><i class="layui-icon layui-icon-notice"></i></div><div class="stat-info"><div class="stat-value" id="stat-notifications">-</div><div class="stat-label">未读通知</div></div></div>';
+            html += '</div>';
+
+            // 快捷入口
+            html += '<div class="admin-card" style="margin-bottom:16px;"><div class="admin-card-title">快捷入口</div>';
+            html += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+            html += '<a href="javascript:;" onclick="loadPage(\'users\')" class="layui-btn layui-btn-normal layui-btn-sm"><i class="layui-icon layui-icon-username"></i> 用户管理</a>';
+            html += '<a href="javascript:;" onclick="loadPage(\'roles\')" class="layui-btn layui-btn-normal layui-btn-sm"><i class="layui-icon layui-icon-group"></i> 角色管理</a>';
+            html += '<a href="javascript:;" onclick="loadPage(\'tasks\')" class="layui-btn layui-btn-normal layui-btn-sm"><i class="layui-icon layui-icon-time"></i> 定时任务</a>';
+            html += '<a href="javascript:;" onclick="loadPage(\'settings\')" class="layui-btn layui-btn-normal layui-btn-sm"><i class="layui-icon layui-icon-set"></i> 系统设置</a>';
+            html += '</div></div>';
+
+            // 最近操作日志
+            html += '<div class="admin-card"><div class="admin-card-title">最近操作日志</div>';
+            html += '<table class="layui-table" lay-size="sm"><thead><tr><th>用户</th><th>操作</th><th>IP</th><th>时间</th></tr></thead>';
+            html += '<tbody id="recent-logs"></tbody></table></div>';
+
+            container.innerHTML = html;
+
+            // 使用 dashboard API 获取统计数据
+            request('/dashboard/stats').then(function(res) {
+                if (res && res.data) {
+                    var stats = res.data;
+                    if (stats.users) {
+                        document.getElementById('stat-users').textContent = stats.users.total || 0;
+                    }
+                    if (stats.roles) {
+                        document.getElementById('stat-roles').textContent = stats.roles.total || 0;
+                    }
+                    if (stats.logs_today !== undefined) {
+                        document.getElementById('stat-logs').textContent = stats.logs_today;
+                    }
+                    if (stats.notifications) {
+                        document.getElementById('stat-notifications').textContent = stats.notifications.unread || 0;
+                    }
+                }
+            }).catch(function(err) {
+                console.error('Failed to load dashboard stats:', err);
+            });
+
+            // 加载最近日志
+            request('/dashboard/recent-logs').then(function(res) {
+                if (res && res.data && res.data.items) {
+                    var tbody = document.getElementById('recent-logs');
+                    var html = '';
+                    res.data.items.forEach(function(log) {
+                        html += '<tr><td>' + esc(log.username || '-') + '</td>';
+                        html += '<td>' + esc(log.action || '-') + '</td>';
+                        html += '<td>' + esc(log.ip || '-') + '</td>';
+                        html += '<td>' + esc(log.created_at || '-') + '</td></tr>';
+                    });
+                    tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;color:#999;">暂无数据</td></tr>';
+                }
+            }).catch(function(err) {
+                console.error('Failed to load recent logs:', err);
+            });
+        }
+
+        // ====== 用户管理 ======
+        function renderUsers(container) {
+            var html = '<div class="search-bar"><div class="layui-form layui-inline">';
+            html += '<div class="layui-inline"><input type="text" id="user-search" placeholder="搜索用户名/邮箱" class="layui-input" style="width:250px;"></div>';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-search-user"><i class="layui-icon layui-icon-search"></i> 搜索</button></div>';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-add-user"><i class="layui-icon layui-icon-add-1"></i> 新增用户</button></div>';
+            html += '</div></div>';
+            html += '<div class="admin-card"><table class="layui-hide" id="user-table" lay-filter="user-table"></table></div>';
+
+            container.innerHTML = html;
+
+            table.render({
+                elem: '#user-table',
+                url: API_BASE + '/users',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                page: true,
+                limit: 20,
+                cols: [[
+                    { field: 'id', title: 'ID', width: 80, sort: true },
+                    { field: 'username', title: '用户名', minWidth: 120 },
+                    { field: 'email', title: '邮箱', minWidth: 180 },
+                    { field: 'phone', title: '电话', width: 140 },
+                    { field: 'status', title: '状态', width: 100, templet: function(d) {
+                        return d.status === 'active' ? '<span style="color:#52c41a">正常</span>' : '<span style="color:#ff4d4f">禁用</span>';
+                    }},
+                    { field: 'created_at', title: '创建时间', width: 180 },
+                    { title: '操作', width: 160, toolbar: '#user-toolbar' }
+                ]],
+                parseData: function(res) {
+                    return {
+                        code: res.code === 0 ? 0 : res.code,
+                        msg: res.message,
+                        count: res.data ? res.data.total : 0,
+                        data: res.data ? res.data.items : []
+                    };
+                }
+            });
+
+            // 工具栏模板
+            var oldTb = document.getElementById('user-toolbar'); if (oldTb) oldTb.remove();
+            var toolbar = document.createElement('script');
+            toolbar.type = 'text/html';
+            toolbar.id = 'user-toolbar';
+            toolbar.textContent = '<a class="layui-btn layui-btn-xs" lay-event="edit">编辑</a><a class="layui-btn layui-btn-primary layui-btn-xs" lay-event="roles">分配角色</a><a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>';
+            document.body.appendChild(toolbar);
+
+            table.on('tool(user-table)', function(obj) {
+                if (obj.event === 'edit') {
+                    showUserForm(obj.data);
+                } else if (obj.event === 'roles') {
+                    showUserRolesForm(obj.data);
+                } else if (obj.event === 'del') {
+                    layer.confirm('确认删除用户 ' + esc(obj.data.username) + ' 吗？', function(index) {
+                        request('/users/' + obj.data.id, { method: 'DELETE' }).then(function() {
+                            layer.close(index);
+                            layer.msg('删除成功', {icon: 1});
+                            obj.del();
+                        }).catch(function() { layer.msg('删除失败', {icon: 2}); });
+                    });
+                }
+            });
+
+            document.getElementById('btn-search-user').addEventListener('click', function() {
+                table.reload('user-table', { where: { search: document.getElementById('user-search').value } });
+            });
+
+            document.getElementById('btn-add-user').addEventListener('click', function() {
+                showUserForm(null);
+            });
+        }
+
+        function showUserForm(data) {
+            var isEdit = !!data;
+            var html = '<div class="form-dialog"><form class="layui-form" lay-filter="user-form">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">用户名</label><div class="layui-input-block"><input type="text" name="username" value="' + esc(data ? data.username : '') + '" class="layui-input" lay-verify="required" placeholder="请输入用户名"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">邮箱</label><div class="layui-input-block"><input type="text" name="email" value="' + esc(data ? data.email || '' : '') + '" class="layui-input" placeholder="请输入邮箱"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">电话</label><div class="layui-input-block"><input type="text" name="phone" value="' + esc(data ? data.phone || '' : '') + '" class="layui-input" placeholder="请输入电话"></div></div>';
+            if (!isEdit) {
+                html += '<div class="layui-form-item"><label class="layui-form-label">密码</label><div class="layui-input-block"><input type="password" name="password" class="layui-input" lay-verify="required" placeholder="请输入密码"></div></div>';
+            }
+            html += '<div class="layui-form-item"><label class="layui-form-label">状态</label><div class="layui-input-block"><select name="status"><option value="active"' + (!data || data.status === 'active' ? ' selected' : '') + '>正常</option><option value="inactive"' + (data && data.status === 'inactive' ? ' selected' : '') + '>禁用</option></select></div></div>';
+            html += '<div class="layui-form-item" style="text-align:right;margin-top:20px;"><button type="button" class="layui-btn layui-btn-primary" id="btn-form-cancel">取消</button><button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="user-submit">确定</button></div>';
+            html += '</form></div>';
+
+            var idx = layer.open({
+                type: 1,
+                title: isEdit ? '编辑用户' : '新增用户',
+                area: ['480px', '420px'],
+                content: html,
+                success: function() {
+                    form.render('select');
+                    form.on('submit(user-submit)', function(formObj) {
+                        var formData = formObj.field;
+                        var url = isEdit ? '/users/' + data.id : '/users';
+                        var method = isEdit ? 'PUT' : 'POST';
+                        request(url, { method: method, body: JSON.stringify(formData) }).then(function(res) {
+                            if (res && res.code === 0) {
+                                layer.msg(isEdit ? '更新成功' : '创建成功', {icon: 1});
+                                layer.close(idx);
+                                table.reload('user-table');
+                            } else {
+                                layer.msg(res.message || '操作失败', {icon: 2});
+                            }
+                        }).catch(function() { layer.msg('操作失败', {icon: 2}); });
+                        return false;
+                    });
+                    document.getElementById('btn-form-cancel').addEventListener('click', function() { layer.close(idx); });
+                }
+            });
+        }
+
+        // ====== 角色管理 ======
+        function renderRoles(container) {
+            var html = '<div class="search-bar"><div class="layui-form layui-inline">';
+            html += '<div class="layui-inline"><input type="text" id="role-search" placeholder="搜索角色名" class="layui-input" style="width:250px;"></div>';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-search-role"><i class="layui-icon layui-icon-search"></i> 搜索</button></div>';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-add-role"><i class="layui-icon layui-icon-add-1"></i> 新增角色</button></div>';
+            html += '</div></div>';
+            html += '<div class="admin-card"><table class="layui-hide" id="role-table" lay-filter="role-table"></table></div>';
+
+            container.innerHTML = html;
+
+            table.render({
+                elem: '#role-table',
+                url: API_BASE + '/roles',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                page: true,
+                limit: 20,
+                cols: [[
+                    { field: 'id', title: 'ID', width: 80, sort: true },
+                    { field: 'name', title: '角色名称', minWidth: 150 },
+                    { field: 'code', title: '角色标识', minWidth: 150 },
+                    { field: 'description', title: '描述', minWidth: 200 },
+                    { field: 'created_at', title: '创建时间', width: 180 },
+                    { title: '操作', width: 160, toolbar: '#role-toolbar' }
+                ]],
+                parseData: function(res) {
+                    return {
+                        code: res.code === 0 ? 0 : res.code,
+                        msg: res.message,
+                        count: res.data ? res.data.total : 0,
+                        data: res.data ? res.data.items : []
+                    };
+                }
+            });
+
+            var oldTb = document.getElementById('role-toolbar'); if (oldTb) oldTb.remove();
+            var toolbar = document.createElement('script');
+            toolbar.type = 'text/html';
+            toolbar.id = 'role-toolbar';
+            toolbar.textContent = '<a class="layui-btn layui-btn-xs" lay-event="edit">编辑</a><a class="layui-btn layui-btn-primary layui-btn-xs" lay-event="perms">分配权限</a><a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>';
+            document.body.appendChild(toolbar);
+
+            table.on('tool(role-table)', function(obj) {
+                if (obj.event === 'edit') {
+                    showRoleForm(obj.data);
+                } else if (obj.event === 'perms') {
+                    showRolePermsForm(obj.data);
+                } else if (obj.event === 'del') {
+                    layer.confirm('确认删除角色 ' + esc(obj.data.name) + ' 吗？', function(index) {
+                        request('/roles/' + obj.data.id, { method: 'DELETE' }).then(function() {
+                            layer.close(index);
+                            layer.msg('删除成功', {icon: 1});
+                            obj.del();
+                        }).catch(function() { layer.msg('删除失败', {icon: 2}); });
+                    });
+                }
+            });
+
+            document.getElementById('btn-search-role').addEventListener('click', function() {
+                table.reload('role-table', { where: { search: document.getElementById('role-search').value } });
+            });
+
+            document.getElementById('btn-add-role').addEventListener('click', function() {
+                showRoleForm(null);
+            });
+        }
+
+        function showRoleForm(data) {
+            var isEdit = !!data;
+            var html = '<div class="form-dialog"><form class="layui-form" lay-filter="role-form">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">角色名称</label><div class="layui-input-block"><input type="text" name="name" value="' + esc(data ? data.name : '') + '" class="layui-input" lay-verify="required" placeholder="请输入角色名称"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">角色标识</label><div class="layui-input-block"><input type="text" name="code" value="' + esc(data ? data.code : '') + '" class="layui-input" lay-verify="required" placeholder="如 admin, editor"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">描述</label><div class="layui-input-block"><textarea name="description" class="layui-textarea" style="height:80px;" placeholder="角色描述">' + esc(data ? data.description || '' : '') + '</textarea></div></div>';
+            html += '<div class="layui-form-item" style="text-align:right;margin-top:20px;"><button type="button" class="layui-btn layui-btn-primary" id="btn-role-cancel">取消</button><button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="role-submit">确定</button></div>';
+            html += '</form></div>';
+
+            var idx = layer.open({
+                type: 1,
+                title: isEdit ? '编辑角色' : '新增角色',
+                area: ['480px', '380px'],
+                content: html,
+                success: function() {
+                    form.on('submit(role-submit)', function(formObj) {
+                        var formData = formObj.field;
+                        var url = isEdit ? '/roles/' + data.id : '/roles';
+                        var method = isEdit ? 'PUT' : 'POST';
+                        request(url, { method: method, body: JSON.stringify(formData) }).then(function(res) {
+                            if (res && res.code === 0) {
+                                layer.msg(isEdit ? '更新成功' : '创建成功', {icon: 1});
+                                layer.close(idx);
+                                table.reload('role-table');
+                            } else {
+                                layer.msg(res.message || '操作失败', {icon: 2});
+                            }
+                        }).catch(function() { layer.msg('操作失败', {icon: 2}); });
+                        return false;
+                    });
+                    document.getElementById('btn-role-cancel').addEventListener('click', function() { layer.close(idx); });
+                }
+            });
+        }
+
+        // ====== 菜单管理 ======
+        function renderMenus(container) {
+            var html = '<div class="search-bar"><div class="layui-form layui-inline">';
+            html += '<div class="layui-inline"><input type="text" id="menu-search" placeholder="搜索菜单名" class="layui-input" style="width:250px;"></div>';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-search-menu"><i class="layui-icon layui-icon-search"></i> 搜索</button></div>';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-add-menu"><i class="layui-icon layui-icon-add-1"></i> 新增菜单</button></div>';
+            html += '</div></div>';
+            html += '<div class="admin-card"><table class="layui-hide" id="menu-table" lay-filter="menu-table"></table></div>';
+
+            container.innerHTML = html;
+
+            table.render({
+                elem: '#menu-table',
+                url: API_BASE + '/menus',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                page: true,
+                limit: 20,
+                cols: [[
+                    { field: 'id', title: 'ID', width: 80, sort: true },
+                    { field: 'name', title: '菜单名称', minWidth: 150 },
+                    { field: 'path', title: '路径', minWidth: 150 },
+                    { field: 'icon', title: '图标', width: 120 },
+                    { field: 'sort_order', title: '排序', width: 80 },
+                    { field: 'status', title: '状态', width: 100, templet: function(d) {
+                        return d.status === 'active' ? '<span style="color:#52c41a">启用</span>' : '<span style="color:#ff4d4f">禁用</span>';
+                    }},
+                    { title: '操作', width: 160, toolbar: '#menu-toolbar' }
+                ]],
+                parseData: function(res) {
+                    return {
+                        code: res.code === 0 ? 0 : res.code,
+                        msg: res.message,
+                        count: res.data ? res.data.total : 0,
+                        data: res.data ? res.data.items : []
+                    };
+                }
+            });
+
+            var oldTb = document.getElementById('menu-toolbar'); if (oldTb) oldTb.remove();
+            var toolbar = document.createElement('script');
+            toolbar.type = 'text/html';
+            toolbar.id = 'menu-toolbar';
+            toolbar.textContent = '<a class="layui-btn layui-btn-xs" lay-event="edit">编辑</a><a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>';
+            document.body.appendChild(toolbar);
+
+            table.on('tool(menu-table)', function(obj) {
+                if (obj.event === 'edit') {
+                    showMenuForm(obj.data);
+                } else if (obj.event === 'del') {
+                    layer.confirm('确认删除菜单 ' + esc(obj.data.name) + ' 吗？', function(index) {
+                        request('/menus/' + obj.data.id, { method: 'DELETE' }).then(function() {
+                            layer.close(index);
+                            layer.msg('删除成功', {icon: 1});
+                            obj.del();
+                        }).catch(function() { layer.msg('删除失败', {icon: 2}); });
+                    });
+                }
+            });
+
+            document.getElementById('btn-search-menu').addEventListener('click', function() {
+                table.reload('menu-table', { where: { search: document.getElementById('menu-search').value } });
+            });
+
+            document.getElementById('btn-add-menu').addEventListener('click', function() {
+                showMenuForm(null);
+            });
+        }
+
+        function showMenuForm(data) {
+            var isEdit = !!data;
+            var html = '<div class="form-dialog"><form class="layui-form" lay-filter="menu-form">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">菜单名称</label><div class="layui-input-block"><input type="text" name="name" value="' + esc(data ? data.name : '') + '" class="layui-input" lay-verify="required" placeholder="请输入菜单名称"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">父级菜单</label><div class="layui-input-block"><select name="parent_id" id="menu-parent-select"><option value="">顶级菜单</option></select></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">路径</label><div class="layui-input-block"><input type="text" name="path" value="' + esc(data ? data.path || '' : '') + '" class="layui-input" placeholder="如 /users"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">图标</label><div class="layui-input-block"><input type="text" name="icon" value="' + esc(data ? data.icon || '' : '') + '" class="layui-input" placeholder="如 layui-icon-username"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">排序</label><div class="layui-input-block"><input type="number" name="sort_order" value="' + esc(data ? data.sort_order || 0 : 0) + '" class="layui-input"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">状态</label><div class="layui-input-block"><select name="status"><option value="active"' + (!data || data.status === 'active' ? ' selected' : '') + '>启用</option><option value="inactive"' + (data && data.status === 'inactive' ? ' selected' : '') + '>禁用</option></select></div></div>';
+            html += '<div class="layui-form-item" style="text-align:right;margin-top:20px;"><button type="button" class="layui-btn layui-btn-primary" id="btn-menu-cancel">取消</button><button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="menu-submit">确定</button></div>';
+            html += '</form></div>';
+
+            var idx = layer.open({
+                type: 1,
+                title: isEdit ? '编辑菜单' : '新增菜单',
+                area: ['480px', '520px'],
+                content: html,
+                success: function() {
+                    // Load parent menu options
+                    request('/menus?per_page=100').then(function(res) {
+                        if (res && res.data && res.data.items) {
+                            var selectEl = document.getElementById('menu-parent-select');
+                            var currentId = data ? data.id : null;
+                            res.data.items.forEach(function(m) {
+                                // Skip self as parent
+                                if (currentId && m.id === currentId) return;
+                                var opt = document.createElement('option');
+                                opt.value = m.id;
+                                opt.textContent = m.name;
+                                if (data && data.parent_id && m.id === data.parent_id) {
+                                    opt.selected = true;
+                                }
+                                selectEl.appendChild(opt);
+                            });
+                            form.render('select');
+                        }
+                    });
+                    
+                    form.on('submit(menu-submit)', function(formObj) {
+                        var formData = formObj.field;
+                        formData.sort_order = parseInt(formData.sort_order) || 0;
+                        if (formData.parent_id === '') {
+                            delete formData.parent_id;
+                        } else {
+                            formData.parent_id = parseInt(formData.parent_id);
+                        }
+                        var url = isEdit ? '/menus/' + data.id : '/menus';
+                        var method = isEdit ? 'PUT' : 'POST';
+                        request(url, { method: method, body: JSON.stringify(formData) }).then(function(res) {
+                            if (res && res.code === 0) {
+                                layer.msg(isEdit ? '更新成功' : '创建成功', {icon: 1});
+                                layer.close(idx);
+                                table.reload('menu-table');
+                            } else {
+                                layer.msg(res.message || '操作失败', {icon: 2});
+                            }
+                        }).catch(function() { layer.msg('操作失败', {icon: 2}); });
+                        return false;
+                    });
+                    document.getElementById('btn-menu-cancel').addEventListener('click', function() { layer.close(idx); });
+                }
+            });
+        }
+
+        // ====== 权限管理 ======
+        function renderPermissions(container) {
+            var html = '<div class="search-bar"><div class="layui-form layui-inline">';
+            html += '<div class="layui-inline"><input type="text" id="perm-search" placeholder="搜索权限名" class="layui-input" style="width:250px;"></div>';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-search-perm"><i class="layui-icon layui-icon-search"></i> 搜索</button></div>';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-add-perm"><i class="layui-icon layui-icon-add-1"></i> 新增权限</button></div>';
+            html += '</div></div>';
+            html += '<div class="admin-card"><table class="layui-hide" id="perm-table" lay-filter="perm-table"></table></div>';
+
+            container.innerHTML = html;
+
+            table.render({
+                elem: '#perm-table',
+                url: API_BASE + '/permissions',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                page: true,
+                limit: 20,
+                cols: [[
+                    { field: 'id', title: 'ID', width: 80, sort: true },
+                    { field: 'name', title: '权限名称', minWidth: 150 },
+                    { field: 'code', title: '权限标识', minWidth: 180 },
+                    { field: 'type', title: '类型', width: 120 },
+                    { field: 'description', title: '描述', minWidth: 200 },
+                    { title: '操作', width: 160, toolbar: '#perm-toolbar' }
+                ]],
+                parseData: function(res) {
+                    return {
+                        code: res.code === 0 ? 0 : res.code,
+                        msg: res.message,
+                        count: res.data ? res.data.total : 0,
+                        data: res.data ? res.data.items : []
+                    };
+                }
+            });
+
+            var oldTb = document.getElementById('perm-toolbar'); if (oldTb) oldTb.remove();
+            var toolbar = document.createElement('script');
+            toolbar.type = 'text/html';
+            toolbar.id = 'perm-toolbar';
+            toolbar.textContent = '<a class="layui-btn layui-btn-xs" lay-event="edit">编辑</a><a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>';
+            document.body.appendChild(toolbar);
+
+            table.on('tool(perm-table)', function(obj) {
+                if (obj.event === 'edit') {
+                    showPermForm(obj.data);
+                } else if (obj.event === 'del') {
+                    layer.confirm('确认删除权限 ' + esc(obj.data.name) + ' 吗？', function(index) {
+                        request('/permissions/' + obj.data.id, { method: 'DELETE' }).then(function() {
+                            layer.close(index);
+                            layer.msg('删除成功', {icon: 1});
+                            obj.del();
+                        }).catch(function() { layer.msg('删除失败', {icon: 2}); });
+                    });
+                }
+            });
+
+            document.getElementById('btn-search-perm').addEventListener('click', function() {
+                table.reload('perm-table', { where: { search: document.getElementById('perm-search').value } });
+            });
+
+            document.getElementById('btn-add-perm').addEventListener('click', function() {
+                showPermForm(null);
+            });
+        }
+
+        function showPermForm(data) {
+            var isEdit = !!data;
+            var html = '<div class="form-dialog"><form class="layui-form" lay-filter="perm-form">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">权限名称</label><div class="layui-input-block"><input type="text" name="name" value="' + esc(data ? data.name : '') + '" class="layui-input" lay-verify="required" placeholder="请输入权限名称"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">权限标识</label><div class="layui-input-block"><input type="text" name="code" value="' + esc(data ? data.code : '') + '" class="layui-input" lay-verify="required" placeholder="如 user:create, role:delete"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">所属模块</label><div class="layui-input-block"><input type="text" name="type" value="' + esc(data ? data.type || '' : '') + '" class="layui-input" placeholder="如 menu, action"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">描述</label><div class="layui-input-block"><textarea name="description" class="layui-textarea" style="height:80px;" placeholder="权限描述">' + esc(data ? data.description || '' : '') + '</textarea></div></div>';
+            html += '<div class="layui-form-item" style="text-align:right;margin-top:20px;"><button type="button" class="layui-btn layui-btn-primary" id="btn-perm-cancel">取消</button><button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="perm-submit">确定</button></div>';
+            html += '</form></div>';
+
+            var idx = layer.open({
+                type: 1,
+                title: isEdit ? '编辑权限' : '新增权限',
+                area: ['480px', '430px'],
+                content: html,
+                success: function() {
+                    form.on('submit(perm-submit)', function(formObj) {
+                        var formData = formObj.field;
+                        var url = isEdit ? '/permissions/' + data.id : '/permissions';
+                        var method = isEdit ? 'PUT' : 'POST';
+                        request(url, { method: method, body: JSON.stringify(formData) }).then(function(res) {
+                            if (res && res.code === 0) {
+                                layer.msg(isEdit ? '更新成功' : '创建成功', {icon: 1});
+                                layer.close(idx);
+                                table.reload('perm-table');
+                            } else {
+                                layer.msg(res.message || '操作失败', {icon: 2});
+                            }
+                        }).catch(function() { layer.msg('操作失败', {icon: 2}); });
+                        return false;
+                    });
+                    document.getElementById('btn-perm-cancel').addEventListener('click', function() { layer.close(idx); });
+                }
+            });
+        }
+
+        // ====== 角色-权限分配 ======
+        function showRolePermsForm(role) {
+            var idx = layer.open({
+                type: 1,
+                title: '分配权限 - ' + esc(role.name),
+                area: ['500px', '500px'],
+                content: '<div class="form-dialog"><div id="role-perms-list" style="max-height:350px;overflow-y:auto;"></div><div style="text-align:right;margin-top:16px;"><button type="button" class="layui-btn layui-btn-primary" id="btn-perms-cancel">取消</button><button type="button" class="layui-btn layui-btn-normal" id="btn-perms-save">保存</button></div></div>',
+                success: function() {
+                    // Load all permissions
+                    var allPerms = [];
+                    var rolePerms = [];
+                    
+                    Promise.all([
+                        request('/permissions?per_page=100'),
+                        request('/roles/' + role.id + '/permissions')
+                    ]).then(function(results) {
+                        if (results[0] && results[0].data) {
+                            allPerms = results[0].data.items || [];
+                        }
+                        if (results[1] && results[1].data) {
+                            rolePerms = results[1].data.items || [];
+                        }
+                        
+                        var rolePermIds = {};
+                        rolePerms.forEach(function(p) { rolePermIds[p.id] = true; });
+                        
+                        var html = '';
+                        allPerms.forEach(function(p) {
+                            var checked = rolePermIds[p.id] ? ' checked' : '';
+                            html += '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;">';
+                            html += '<input type="checkbox" name="perm" value="' + p.id + '" title="' + esc(p.name) + '"' + checked + ' lay-skin="primary">';
+                            html += '<span style="margin-left:8px;">' + esc(p.name) + '</span>';
+                            html += '<span style="color:#999;margin-left:8px;font-size:12px;">' + esc(p.code) + '</span>';
+                            html += '</div>';
+                        });
+                        if (allPerms.length === 0) {
+                            html = '<div style="text-align:center;color:#999;padding:20px;">暂无权限数据</div>';
+                        }
+                        document.getElementById('role-perms-list').innerHTML = html;
+                        form.render('checkbox');
+                    }).catch(function(e) {
+                        document.getElementById('role-perms-list').innerHTML = '<div style="text-align:center;color:#ff4d4f;padding:20px;">加载失败</div>';
+                    });
+                    
+                    document.getElementById('btn-perms-cancel').addEventListener('click', function() { layer.close(idx); });
+                    document.getElementById('btn-perms-save').addEventListener('click', function() {
+                        var checkboxes = document.querySelectorAll('input[name="perm"]:checked');
+                        var permIds = [];
+                        checkboxes.forEach(function(cb) { permIds.push(parseInt(cb.value)); });
+                        
+                        // Get current role permission IDs
+                        request('/roles/' + role.id + '/permissions').then(function(res) {
+                            var currentPermIds = [];
+                            if (res && res.data) {
+                                (res.data.items || []).forEach(function(p) { currentPermIds.push(p.id); });
+                            }
+                            
+                            // Remove permissions not in new list
+                            var toRemove = currentPermIds.filter(function(id) { return permIds.indexOf(id) === -1; });
+                            var toAdd = permIds.filter(function(id) { return currentPermIds.indexOf(id) === -1; });
+                            
+                            var promises = [];
+                            toRemove.forEach(function(pid) {
+                                promises.push(request('/roles/' + role.id + '/permissions/' + pid, { method: 'DELETE' }));
+                            });
+                            toAdd.forEach(function(pid) {
+                                promises.push(request('/roles/' + role.id + '/permissions', { method: 'POST', body: JSON.stringify({ permission_id: pid }) }));
+                            });
+                            
+                            return Promise.all(promises);
+                        }).then(function() {
+                            layer.msg('权限分配成功', {icon: 1});
+                            layer.close(idx);
+                        }).catch(function(e) {
+                            layer.msg('权限分配失败', {icon: 2});
+                        });
+                    });
+                }
+            });
+        }
+
+        // ====== 用户-角色分配 ======
+        function showUserRolesForm(user) {
+            var idx = layer.open({
+                type: 1,
+                title: '分配角色 - ' + esc(user.username),
+                area: ['450px', '400px'],
+                content: '<div class="form-dialog"><div id="user-roles-list" style="max-height:280px;overflow-y:auto;"></div><div style="text-align:right;margin-top:16px;"><button type="button" class="layui-btn layui-btn-primary" id="btn-roles-cancel">取消</button><button type="button" class="layui-btn layui-btn-normal" id="btn-roles-save">保存</button></div></div>',
+                success: function() {
+                    // Load all roles and user's roles
+                    var allRoles = [];
+                    var userRoles = [];
+                    
+                    Promise.all([
+                        request('/roles?per_page=100'),
+                        request('/users/' + user.id + '/roles')
+                    ]).then(function(results) {
+                        if (results[0] && results[0].data) {
+                            allRoles = results[0].data.items || [];
+                        }
+                        if (results[1] && results[1].data) {
+                            userRoles = results[1].data.items || [];
+                        }
+                        
+                        var userRoleIds = {};
+                        userRoles.forEach(function(r) { userRoleIds[r.id] = true; });
+                        
+                        var html = '';
+                        allRoles.forEach(function(r) {
+                            var checked = userRoleIds[r.id] ? ' checked' : '';
+                            html += '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">';
+                            html += '<input type="checkbox" name="role" value="' + r.id + '" title="' + esc(r.name) + '"' + checked + ' lay-skin="primary">';
+                            html += '<span style="margin-left:8px;">' + esc(r.name) + '</span>';
+                            html += '<span style="color:#999;margin-left:8px;font-size:12px;">' + esc(r.code) + '</span>';
+                            html += '</div>';
+                        });
+                        if (allRoles.length === 0) {
+                            html = '<div style="text-align:center;color:#999;padding:20px;">暂无角色数据</div>';
+                        }
+                        document.getElementById('user-roles-list').innerHTML = html;
+                        form.render('checkbox');
+                    }).catch(function(e) {
+                        document.getElementById('user-roles-list').innerHTML = '<div style="text-align:center;color:#ff4d4f;padding:20px;">加载失败</div>';
+                    });
+                    
+                    document.getElementById('btn-roles-cancel').addEventListener('click', function() { layer.close(idx); });
+                    document.getElementById('btn-roles-save').addEventListener('click', function() {
+                        var checkboxes = document.querySelectorAll('input[name="role"]:checked');
+                        var roleIds = [];
+                        checkboxes.forEach(function(cb) { roleIds.push(parseInt(cb.value)); });
+                        
+                        // Get current user role IDs
+                        request('/users/' + user.id + '/roles').then(function(res) {
+                            var currentRoleIds = [];
+                            if (res && res.data) {
+                                (res.data.items || []).forEach(function(r) { currentRoleIds.push(r.id); });
+                            }
+                            
+                            // Remove roles not in new list
+                            var toRemove = currentRoleIds.filter(function(id) { return roleIds.indexOf(id) === -1; });
+                            var toAdd = roleIds.filter(function(id) { return currentRoleIds.indexOf(id) === -1; });
+                            
+                            var promises = [];
+                            toRemove.forEach(function(rid) {
+                                promises.push(request('/roles/' + rid + '/users/' + user.id, { method: 'DELETE' }));
+                            });
+                            toAdd.forEach(function(rid) {
+                                promises.push(request('/roles/' + rid + '/users', { method: 'POST', body: JSON.stringify({ user_id: user.id }) }));
+                            });
+                            
+                            return Promise.all(promises);
+                        }).then(function() {
+                            layer.msg('角色分配成功', {icon: 1});
+                            layer.close(idx);
+                        }).catch(function(e) {
+                            layer.msg('角色分配失败', {icon: 2});
+                        });
+                    });
+                }
+            });
+        }
+
+        // ====== 日志管理 ======
+        function renderLogs(container) {
+            var html = '<div class="search-bar"><div class="layui-form layui-inline">';
+            html += '<div class="layui-inline"><input type="text" id="log-search" placeholder="搜索操作内容" class="layui-input" style="width:250px;"></div>';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-search-log"><i class="layui-icon layui-icon-search"></i> 搜索</button></div>';
+            html += '</div></div>';
+            html += '<div class="admin-card"><table class="layui-hide" id="log-table" lay-filter="log-table"></table></div>';
+
+            container.innerHTML = html;
+
+            table.render({
+                elem: '#log-table',
+                url: API_BASE + '/logs',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                page: true,
+                limit: 20,
+                cols: [[
+                    { field: 'id', title: 'ID', width: 80 },
+                    { field: 'username', title: '用户', width: 120 },
+                    { field: 'action', title: '操作', minWidth: 150 },
+                    { field: 'method', title: '方法', width: 80 },
+                    { field: 'path', title: '路径', minWidth: 200 },
+                    { field: 'ip', title: 'IP地址', width: 140 },
+                    { field: 'status', title: '状态', width: 100 },
+                    { field: 'created_at', title: '时间', width: 180 }
+                ]],
+                parseData: function(res) {
+                    return {
+                        code: res.code === 0 ? 0 : res.code,
+                        msg: res.message,
+                        count: res.data ? res.data.total : 0,
+                        data: res.data ? res.data.items : []
+                    };
+                }
+            });
+
+            document.getElementById('btn-search-log').addEventListener('click', function() {
+                table.reload('log-table', { where: { search: document.getElementById('log-search').value } });
+            });
+        }
+
+        // ====== 个人中心 ======
+        document.getElementById('btn-profile').addEventListener('click', function() {
+            var html = '<div class="form-dialog"><form class="layui-form" lay-filter="profile-form">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">用户名</label><div class="layui-input-block"><input type="text" name="username" value="' + esc(currentUser ? currentUser.username : '') + '" class="layui-input" disabled></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">邮箱</label><div class="layui-input-block"><input type="text" name="email" value="' + esc(currentUser ? currentUser.email || '' : '') + '" class="layui-input" placeholder="请输入邮箱"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">电话</label><div class="layui-input-block"><input type="text" name="phone" value="' + esc(currentUser ? currentUser.phone || '' : '') + '" class="layui-input" placeholder="请输入电话"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">真实姓名</label><div class="layui-input-block"><input type="text" name="real_name" value="' + esc(currentUser ? currentUser.real_name || '' : '') + '" class="layui-input" placeholder="请输入真实姓名"></div></div>';
+            html += '<div class="layui-form-item" style="text-align:right;margin-top:20px;"><button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="profile-submit">保存修改</button></div>';
+            html += '</form></div>';
+
+            var idx = layer.open({
+                type: 1,
+                title: '个人中心',
+                area: ['480px', '380px'],
+                content: html,
+                success: function() {
+                    form.on('submit(profile-submit)', function(formObj) {
+                        var formData = formObj.field;
+                        delete formData.username;
+                        request('/auth/me', {
+                            method: 'PUT',
+                            body: JSON.stringify(formData)
+                        }).then(function(res) {
+                            if (res && res.code === 0) {
+                                layer.msg('个人信息已更新', {icon: 1});
+                                layer.close(idx);
+                                loadCurrentUser();
+                            } else {
+                                layer.msg(res.message || '更新失败', {icon: 2});
+                            }
+                        }).catch(function() { layer.msg('更新失败', {icon: 2}); });
+                        return false;
+                    });
+                }
+            });
+        });
+
+        // ====== 修改密码 ======
+        document.getElementById('btn-password').addEventListener('click', function() {
+            var html = '<div class="form-dialog"><form class="layui-form" lay-filter="pwd-form">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">旧密码</label><div class="layui-input-block"><input type="password" name="old_password" class="layui-input" lay-verify="required" placeholder="请输入旧密码"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">新密码</label><div class="layui-input-block"><input type="password" name="new_password" class="layui-input" lay-verify="required" placeholder="请输入新密码"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">确认密码</label><div class="layui-input-block"><input type="password" name="confirm_password" class="layui-input" lay-verify="required" placeholder="请再次输入新密码"></div></div>';
+            html += '<div class="layui-form-item" style="text-align:right;margin-top:20px;"><button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="pwd-submit">确定修改</button></div>';
+            html += '</form></div>';
+
+            var idx = layer.open({
+                type: 1,
+                title: '修改密码',
+                area: ['460px', '320px'],
+                content: html,
+                success: function() {
+                    form.on('submit(pwd-submit)', function(formObj) {
+                        var fd = formObj.field;
+                        if (fd.new_password !== fd.confirm_password) {
+                            layer.msg('两次密码输入不一致', {icon: 2});
+                            return false;
+                        }
+                        request('/auth/password', {
+                            method: 'PUT',
+                            body: JSON.stringify({ old_password: fd.old_password, new_password: fd.new_password })
+                        }).then(function(res) {
+                            if (res && res.code === 0) {
+                                layer.msg('密码修改成功，请重新登录', {icon: 1});
+                                layer.close(idx);
+                                setTimeout(function() {
+                                    localStorage.removeItem('token');
+                                    window.location.href = '/login';
+                                }, 1500);
+                            } else {
+                                layer.msg(res.message || '修改失败', {icon: 2});
+                            }
+                        }).catch(function() { layer.msg('修改失败', {icon: 2}); });
+                        return false;
+                    });
+                }
+            });
+        });
+
+        // ====== 退出登录 ======
+        document.getElementById('btn-logout').addEventListener('click', function() {
+            layer.confirm('确认退出登录吗？', function(index) {
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+                layer.close(index);
+            });
+        });
+
+        // ====== 通知管理 ======
+        function renderNotifications(container) {
+            var html = '<div class="admin-card"><div class="admin-card-title" style="display:flex;justify-content:space-between;align-items:center;">';
+            html += '<span>我的通知</span>';
+            html += '<div><button class="layui-btn layui-btn-sm layui-btn-primary" id="btn-mark-all-read">全部已读</button></div>';
+            html += '</div>';
+            html += '<div id="notifications-list" style="min-height:200px;"></div>';
+            html += '<div id="notifications-page" style="text-align:center;margin-top:16px;"></div></div>';
+
+            container.innerHTML = html;
+            loadNotifications(1);
+
+            document.getElementById('btn-mark-all-read').addEventListener('click', function() {
+                request('/notifications/mark-all-read', { method: 'POST' }).then(function(res) {
+                    if (res && res.code === 0) {
+                        layer.msg('已全部标记为已读', {icon: 1});
+                        loadNotifications(1);
+                    }
+                });
+            });
+        }
+
+        function loadNotifications(page) {
+            var listEl = document.getElementById('notifications-list');
+            listEl.innerHTML = '<div style="text-align:center;padding:40px;"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop" style="font-size:24px;"></i></div>';
+
+            request('/notifications?page=' + page + '&page_size=10').then(function(res) {
+                if (res && res.code === 0 && res.data) {
+                    var list = res.data.list || res.data.items || [];
+                    var unreadCount = res.data.unread_count || 0;
+
+                    if (list.length === 0) {
+                        listEl.innerHTML = '<div style="text-align:center;color:#999;padding:40px;">暂无通知</div>';
+                        return;
+                    }
+
+                    var html = '';
+                    list.forEach(function(n) {
+                        var bgStyle = n.is_read ? '' : 'background:#f6ffed;';
+                        html += '<div class="notification-item" data-id="' + n.id + '" style="padding:16px;border-bottom:1px solid #f0f0f0;' + bgStyle + 'cursor:pointer;">';
+                        html += '<div style="display:flex;justify-content:space-between;align-items:start;">';
+                        html += '<div><strong>' + esc(n.title) + '</strong>';
+                        if (!n.is_read) {
+                            html += ' <span class="layui-badge-dot" style="background:#ff4d4f;"></span>';
+                        }
+                        html += '</div>';
+                        html += '<span style="color:#999;font-size:12px;">' + (n.created_at || '') + '</span>';
+                        html += '</div>';
+                        html += '<div style="color:#666;margin-top:8px;font-size:13px;">' + esc(n.content) + '</div>';
+                        html += '</div>';
+                    });
+                    listEl.innerHTML = html;
+
+                    // 点击查看详情
+                    listEl.querySelectorAll('.notification-item').forEach(function(el) {
+                        el.addEventListener('click', function() {
+                            var id = this.getAttribute('data-id');
+                            request('/notifications/' + id).then(function(res) {
+                                if (res && res.code === 0) {
+                                    loadNotifications(page);
+                                }
+                            });
+                        });
+                    });
+                }
+            }).catch(function() {
+                listEl.innerHTML = '<div style="text-align:center;color:#ff4d4f;padding:40px;">加载失败</div>';
+            });
+        }
+
+        // ====== 定时任务管理 ======
+        function renderTasks(container) {
+            var html = '<div class="search-bar"><div class="layui-form layui-inline">';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-add-task"><i class="layui-icon layui-icon-add-1"></i> 新增任务</button></div>';
+            html += '</div></div>';
+            html += '<div class="admin-card"><table class="layui-hide" id="task-table" lay-filter="task-table"></table></div>';
+
+            container.innerHTML = html;
+
+            table.render({
+                elem: '#task-table',
+                url: API_BASE + '/scheduled-tasks',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                page: true,
+                limit: 20,
+                cols: [[
+                    { field: 'id', title: 'ID', width: 60 },
+                    { field: 'name', title: '任务名称', minWidth: 150 },
+                    { field: 'code', title: '任务代码', width: 120 },
+                    { field: 'cron_expr', title: 'Cron表达式', width: 120 },
+                    { field: 'status', title: '状态', width: 80, templet: function(d) {
+                        return d.status === 'enabled' ? '<span class="layui-badge layui-bg-green">启用</span>' : '<span class="layui-badge">禁用</span>';
+                    }},
+                    { field: 'run_count', title: '执行次数', width: 80 },
+                    { field: 'last_run_at', title: '上次执行', width: 160 },
+                    { title: '操作', width: 200, toolbar: '#task-toolbar' }
+                ]],
+                parseData: function(res) {
+                    return {
+                        code: res.code === 0 ? 0 : res.code,
+                        msg: res.message,
+                        count: res.data ? res.data.total : 0,
+                        data: res.data ? (res.data.items || res.data.list || []) : []
+                    };
+                }
+            });
+
+            var oldTb = document.getElementById('task-toolbar'); if (oldTb) oldTb.remove();
+            var toolbar = document.createElement('script');
+            toolbar.type = 'text/html';
+            toolbar.id = 'task-toolbar';
+            toolbar.textContent = '<a class="layui-btn layui-btn-xs" lay-event="run">执行</a><a class="layui-btn layui-btn-xs layui-btn-normal" lay-event="toggle">启用/禁用</a><a class="layui-btn layui-btn-xs layui-btn-primary" lay-event="edit">编辑</a><a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="del">删除</a>';
+            document.body.appendChild(toolbar);
+
+            table.on('tool(task-table)', function(obj) {
+                var data = obj.data;
+                if (obj.event === 'run') {
+                    request('/scheduled-tasks/' + data.id + '/run', { method: 'POST' }).then(function(res) {
+                        if (res && res.code === 0) {
+                            layer.msg('任务已加入执行队列', {icon: 1});
+                            table.reload('task-table');
+                        } else {
+                            layer.msg(res.message || '执行失败', {icon: 2});
+                        }
+                    });
+                } else if (obj.event === 'toggle') {
+                    request('/scheduled-tasks/' + data.id + '/toggle', { method: 'POST' }).then(function(res) {
+                        if (res && res.code === 0) {
+                            layer.msg('状态已更新', {icon: 1});
+                            table.reload('task-table');
+                        }
+                    });
+                } else if (obj.event === 'edit') {
+                    showTaskForm(data);
+                } else if (obj.event === 'del') {
+                    layer.confirm('确认删除任务 "' + esc(data.name) + '" 吗？', function(index) {
+                        request('/scheduled-tasks/' + data.id, { method: 'DELETE' }).then(function() {
+                            layer.close(index);
+                            layer.msg('删除成功', {icon: 1});
+                            obj.del();
+                        });
+                    });
+                }
+            });
+
+            document.getElementById('btn-add-task').addEventListener('click', function() {
+                showTaskForm(null);
+            });
+        }
+
+        function showTaskForm(data) {
+            var isEdit = !!data;
+            var html = '<div class="form-dialog"><form class="layui-form" lay-filter="task-form">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">任务名称</label><div class="layui-input-block"><input type="text" name="name" value="' + esc(data ? data.name : '') + '" class="layui-input" lay-verify="required"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">任务代码</label><div class="layui-input-block"><input type="text" name="code" value="' + esc(data ? data.code : '') + '" class="layui-input" lay-verify="required" placeholder="英文标识"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">Cron表达式</label><div class="layui-input-block"><input type="text" name="cron_expr" value="' + esc(data ? data.cron_expr : '') + '" class="layui-input" lay-verify="required" placeholder="如: 0 9 * * *"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">描述</label><div class="layui-input-block"><textarea name="description" class="layui-textarea" style="height:80px;">' + esc(data ? data.description || '' : '') + '</textarea></div></div>';
+            html += '<div class="layui-form-item" style="text-align:right;margin-top:20px;"><button type="button" class="layui-btn layui-btn-primary" id="btn-task-cancel">取消</button><button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="task-submit">确定</button></div>';
+            html += '</form></div>';
+
+            var idx = layer.open({
+                type: 1,
+                title: isEdit ? '编辑任务' : '新增任务',
+                area: ['500px', '400px'],
+                content: html,
+                success: function() {
+                    form.on('submit(task-submit)', function(formObj) {
+                        var formData = formObj.field;
+                        var url = isEdit ? '/scheduled-tasks/' + data.id : '/scheduled-tasks';
+                        var method = isEdit ? 'PUT' : 'POST';
+                        request(url, { method: method, body: JSON.stringify(formData) }).then(function(res) {
+                            if (res && res.code === 0) {
+                                layer.msg(isEdit ? '更新成功' : '创建成功', {icon: 1});
+                                layer.close(idx);
+                                table.reload('task-table');
+                            } else {
+                                layer.msg(res.message || '操作失败', {icon: 2});
+                            }
+                        });
+                        return false;
+                    });
+                    document.getElementById('btn-task-cancel').addEventListener('click', function() { layer.close(idx); });
+                }
+            });
+        }
+
+        // ====== 系统设置 ======
+        function renderSettings(container) {
+            var html = '<div class="admin-card"><div class="admin-card-title">系统设置</div>';
+            html += '<div id="settings-list" style="min-height:200px;"></div></div>';
+
+            container.innerHTML = html;
+
+            request('/settings').then(function(res) {
+                if (res && res.code === 0 && res.data) {
+                    var list = res.data.items || [];
+                    var listEl = document.getElementById('settings-list');
+
+                    if (list.length === 0) {
+                        listEl.innerHTML = '<div style="text-align:center;color:#999;padding:40px;">暂无设置项</div>';
+                        return;
+                    }
+
+                    var html = '<form class="layui-form" lay-filter="settings-form">';
+                    list.forEach(function(s) {
+                        html += '<div class="layui-form-item">';
+                        html += '<label class="layui-form-label" style="width:150px;">' + esc(s.label || s.key) + '</label>';
+                        html += '<div class="layui-input-block" style="margin-left:180px;">';
+                        if (s.type === 'boolean') {
+                            var checked = s.value === 'true' ? ' checked' : '';
+                            html += '<input type="checkbox" name="setting_' + esc(s.key) + '" lay-skin="switch" lay-text="开|关"' + checked + '>';
+                        } else {
+                            html += '<input type="text" name="setting_' + esc(s.key) + '" value="' + esc(s.value) + '" class="layui-input" style="max-width:400px;">';
+                        }
+                        html += '</div></div>';
+                    });
+                    html += '<div class="layui-form-item" style="margin-left:180px;margin-top:20px;"><button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="settings-submit">保存设置</button></div>';
+                    html += '</form>';
+                    listEl.innerHTML = html;
+                    form.render();
+
+                    form.on('submit(settings-submit)', function(formObj) {
+                        var formData = formObj.field;
+                        var promises = [];
+                        list.forEach(function(s) {
+                            var key = 'setting_' + s.key;
+                            var value = formData[key];
+                            if (s.type === 'boolean') {
+                                value = formData[key] === 'on' ? 'true' : 'false';
+                            }
+                            if (value !== undefined) {
+                                promises.push(request('/settings/' + s.key, {
+                                    method: 'PUT',
+                                    body: JSON.stringify({ value: value })
+                                }));
+                            }
+                        });
+                        Promise.all(promises).then(function() {
+                            layer.msg('设置已保存', {icon: 1});
+                        }).catch(function() {
+                            layer.msg('保存失败', {icon: 2});
+                        });
+                        return false;
+                    });
+                }
+            }).catch(function(err) {
+                document.getElementById('settings-list').innerHTML = '<div style="text-align:center;color:#ff4d4f;padding:40px;">加载失败，请检查权限</div>';
+            });
+        }
+
+        // ====== 数据导出 ======
+        function renderExport(container) {
+            var html = '<div class="admin-card"><div class="admin-card-title">数据导出</div>';
+            html += '<form class="layui-form" style="padding:20px;" lay-filter="export-form">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">选择表</label><div class="layui-input-block">';
+            html += '<select name="table" id="export-table" lay-verify="required">';
+            html += '<option value="">请选择要导出的表</option>';
+            html += '<option value="users">用户表</option>';
+            html += '<option value="roles">角色表</option>';
+            html += '<option value="permissions">权限表</option>';
+            html += '<option value="menus">菜单表</option>';
+            html += '<option value="operation_logs">操作日志表</option>';
+            html += '</select></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">导出格式</label><div class="layui-input-block">';
+            html += '<input type="radio" name="format" value="csv" title="CSV" checked>';
+            html += '<input type="radio" name="format" value="json" title="JSON">';
+            html += '</div></div>';
+            html += '<div class="layui-form-item"><div class="layui-input-block">';
+            html += '<button type="button" class="layui-btn layui-btn-normal" id="btn-export"><i class="layui-icon layui-icon-export"></i> 导出数据</button>';
+            html += '<button type="button" class="layui-btn layui-btn-primary" id="btn-download-template"><i class="layui-icon layui-icon-download-circle"></i> 下载导入模板</button>';
+            html += '</div></div>';
+            html += '</form></div>';
+
+            container.innerHTML = html;
+            form.render('select');
+            form.render('radio');
+
+            document.getElementById('btn-export').addEventListener('click', function() {
+                var tableName = document.getElementById('export-table').value;
+                if (!tableName) {
+                    layer.msg('请选择要导出的表', {icon: 2});
+                    return;
+                }
+                var format = document.querySelector('input[name="format"]:checked').value;
+                var url = API_BASE + '/export/' + format;
+
+                layer.msg('正在导出...', {icon: 16, time: 0});
+
+                request(url, {
+                    method: 'POST',
+                    body: JSON.stringify({ table: tableName })
+                }).then(function(res) {
+                    layer.closeAll('msg');
+                    if (res) {
+                        var content = format === 'json' ? JSON.stringify(res, null, 2) : res;
+                        var blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/csv' });
+                        var downloadUrl = URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = downloadUrl;
+                        a.download = tableName + '_export.' + format;
+                        a.click();
+                        URL.revokeObjectURL(downloadUrl);
+                        layer.msg('导出成功', {icon: 1});
+                    }
+                }).catch(function() {
+                    layer.closeAll('msg');
+                    layer.msg('导出失败', {icon: 2});
+                });
+            });
+
+            document.getElementById('btn-download-template').addEventListener('click', function() {
+                var tableName = document.getElementById('export-table').value;
+                if (!tableName) {
+                    layer.msg('请选择表后下载模板', {icon: 2});
+                    return;
+                }
+                window.open(API_BASE + '/export/template?table=' + tableName + '&token=' + localStorage.getItem('token'));
+            });
+        }
+
+        // ====== 数据导入 ======
+        function renderImport(container) {
+            var html = '<div class="admin-card"><div class="admin-card-title">数据导入</div>';
+            html += '<form class="layui-form" style="padding:20px;" lay-filter="import-form">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">选择表</label><div class="layui-input-block">';
+            html += '<select name="table" id="import-table" lay-verify="required">';
+            html += '<option value="">请选择要导入的表</option>';
+            html += '<option value="users">用户表</option>';
+            html += '<option value="roles">角色表</option>';
+            html += '<option value="permissions">权限表</option>';
+            html += '<option value="menus">菜单表</option>';
+            html += '</select></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">选择文件</label><div class="layui-input-block">';
+            html += '<button type="button" class="layui-btn" id="btn-select-file"><i class="layui-icon layui-icon-upload"></i> 选择文件</button>';
+            html += '<span id="selected-file" style="margin-left:10px;color:#999;">支持 CSV、JSON 格式</span>';
+            html += '</div></div>';
+            html += '<div class="layui-form-item"><div class="layui-input-block">';
+            html += '<button type="button" class="layui-btn layui-btn-normal" id="btn-import"><i class="layui-icon layui-icon-upload-drag"></i> 开始导入</button>';
+            html += '</div></div>';
+            html += '</form>';
+            html += '<div id="import-result" style="padding:20px;display:none;"></div></div>';
+
+            container.innerHTML = html;
+            form.render('select');
+
+            var selectedFile = null;
+
+            document.getElementById('btn-select-file').addEventListener('click', function() {
+                var input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.csv,.json';
+                input.onchange = function(e) {
+                    selectedFile = e.target.files[0];
+                    if (selectedFile) {
+                        document.getElementById('selected-file').textContent = selectedFile.name;
+                        document.getElementById('selected-file').style.color = '#52c41a';
+                    }
+                };
+                input.click();
+            });
+
+            document.getElementById('btn-import').addEventListener('click', function() {
+                var tableName = document.getElementById('import-table').value;
+                if (!tableName) {
+                    layer.msg('请选择要导入的表', {icon: 2});
+                    return;
+                }
+                if (!selectedFile) {
+                    layer.msg('请选择要导入的文件', {icon: 2});
+                    return;
+                }
+
+                var formData = new FormData();
+                formData.append('file', selectedFile);
+
+                layer.msg('正在导入...', {icon: 16, time: 0});
+
+                fetch(API_BASE + '/import/' + (selectedFile.name.endsWith('.json') ? 'json' : 'csv') + '?table=' + tableName, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                    body: formData
+                }).then(function(res) { return res.json(); }).then(function(res) {
+                    layer.closeAll('msg');
+                    var resultEl = document.getElementById('import-result');
+                    if (res && res.code === 0) {
+                        resultEl.style.display = 'block';
+                        resultEl.innerHTML = '<div style="background:#f6ffed;padding:16px;border-radius:4px;">';
+                        resultEl.innerHTML += '<p style="color:#52c41a;font-weight:bold;">导入完成</p>';
+                        resultEl.innerHTML += '<p>成功: ' + (res.data.success || 0) + ' 条</p>';
+                        resultEl.innerHTML += '<p>失败: ' + (res.data.failed || 0) + ' 条</p>';
+                        if (res.data.errors && res.data.errors.length > 0) {
+                            resultEl.innerHTML += '<p style="color:#ff4d4f;">错误信息:</p>';
+                            resultEl.innerHTML += '<ul style="color:#ff4d4f;margin-left:20px;">';
+                            res.data.errors.slice(0, 10).forEach(function(e) {
+                                resultEl.innerHTML += '<li>' + esc(e) + '</li>';
+                            });
+                            if (res.data.errors.length > 10) {
+                                resultEl.innerHTML += '<li>...还有 ' + (res.data.errors.length - 10) + ' 条错误</li>';
+                            }
+                            resultEl.innerHTML += '</ul>';
+                        }
+                        resultEl.innerHTML += '</div>';
+                    } else {
+                        layer.msg(res.message || '导入失败', {icon: 2});
+                    }
+                }).catch(function() {
+                    layer.closeAll('msg');
+                    layer.msg('导入失败', {icon: 2});
+                });
+            });
+        }
+
+        // ====== 文件管理 ======
+        function renderUploads(container) {
+            var html = '<div class="search-bar"><div class="layui-form layui-inline">';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-upload-file"><i class="layui-icon layui-icon-upload"></i> 上传文件</button></div>';
+            html += '</div></div>';
+            html += '<div class="admin-card"><table class="layui-hide" id="upload-table" lay-filter="upload-table"></table></div>';
+
+            container.innerHTML = html;
+
+            table.render({
+                elem: '#upload-table',
+                url: API_BASE + '/uploads',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                page: true,
+                limit: 20,
+                cols: [[
+                    { field: 'id', title: 'ID', width: 60 },
+                    { field: 'original_name', title: '文件名', minWidth: 200 },
+                    { field: 'file_size', title: '大小', width: 100, templet: function(d) {
+                        var size = d.file_size || 0;
+                        if (size < 1024) return size + ' B';
+                        if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB';
+                        return (size / 1024 / 1024).toFixed(1) + ' MB';
+                    }},
+                    { field: 'mime_type', title: '类型', width: 120 },
+                    { field: 'created_at', title: '上传时间', width: 160 },
+                    { title: '操作', width: 150, toolbar: '#upload-toolbar' }
+                ]],
+                parseData: function(res) {
+                    return {
+                        code: res.code === 0 ? 0 : res.code,
+                        msg: res.message,
+                        count: res.data ? res.data.total : 0,
+                        data: res.data ? (res.data.items || res.data.list || []) : []
+                    };
+                }
+            });
+
+            var oldTb = document.getElementById('upload-toolbar'); if (oldTb) oldTb.remove();
+            var toolbar = document.createElement('script');
+            toolbar.type = 'text/html';
+            toolbar.id = 'upload-toolbar';
+            toolbar.textContent = '<a class="layui-btn layui-btn-xs" lay-event="preview">预览</a><a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="delete">删除</a>';
+            document.body.appendChild(toolbar);
+
+            table.on('tool(upload-table)', function(obj) {
+                var data = obj.data;
+                if (obj.event === 'preview') {
+                    if (data.mime_type && data.mime_type.startsWith('image/')) {
+                        layer.open({
+                            type: 1,
+                            title: '图片预览',
+                            area: ['600px', '450px'],
+                            content: '<div style="padding:20px;text-align:center;"><img src="' + data.url + '" style="max-width:100%;max-height:380px;"></div>'
+                        });
+                    } else {
+                        window.open(data.url, '_blank');
+                    }
+                } else if (obj.event === 'delete') {
+                    layer.confirm('确定删除此文件？', function(idx) {
+                        request('/uploads/' + data.id, { method: 'DELETE' }).then(function(res) {
+                            if (res && res.code === 0) {
+                                layer.msg('删除成功', {icon: 1});
+                                obj.del();
+                            } else {
+                                layer.msg(res.message || '删除失败', {icon: 2});
+                            }
+                            layer.close(idx);
+                        }).catch(function() { layer.msg('删除失败', {icon: 2}); });
+                    });
+                }
+            });
+
+            // 上传文件
+            document.getElementById('btn-upload-file').addEventListener('click', function() {
+                var uploadHtml = '<div class="form-dialog" style="padding:16px;">';
+                uploadHtml += '<div class="layui-upload-drag" id="upload-area" style="padding:40px;text-align:center;border:2px dashed #e6e6e6;border-radius:4px;cursor:pointer;">';
+                uploadHtml += '<i class="layui-icon layui-icon-upload" style="font-size:48px;color:#c0c0c0;"></i>';
+                uploadHtml += '<p style="margin-top:10px;color:#999;">点击或拖拽文件到此处上传</p>';
+                uploadHtml += '</div>';
+                uploadHtml += '<div id="upload-list" style="margin-top:16px;"></div>';
+                uploadHtml += '</div>';
+
+                var idx = layer.open({
+                    type: 1,
+                    title: '上传文件',
+                    area: ['500px', '350px'],
+                    content: uploadHtml,
+                    success: function() {
+                        var uploadInst = layui.upload.render({
+                            elem: '#upload-area',
+                            url: API_BASE + '/uploads',
+                            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                            accept: 'file',
+                            multiple: true,
+                            before: function(obj) {
+                                document.getElementById('upload-list').innerHTML = '<p style="color:#1890ff;">上传中...</p>';
+                            },
+                            done: function(res) {
+                                if (res.code === 0) {
+                                    document.getElementById('upload-list').innerHTML = '<p style="color:#52c41a;"><i class="layui-icon layui-icon-ok-circle"></i> 上传成功</p>';
+                                    setTimeout(function() {
+                                        layer.close(idx);
+                                        table.reload('upload-table');
+                                    }, 1000);
+                                } else {
+                                    document.getElementById('upload-list').innerHTML = '<p style="color:#f5222d;"><i class="layui-icon layui-icon-close-fill"></i> ' + esc(res.message || '上传失败') + '</p>';
+                                }
+                            },
+                            error: function() {
+                                document.getElementById('upload-list').innerHTML = '<p style="color:#f5222d;"><i class="layui-icon layui-icon-close-fill"></i> 上传失败</p>';
+                            }
+                        });
+                    }
+                });
+            });
+        }
+
+        // ====== 审计日志 ======
+        function renderAudit(container) {
+            var html = '<div class="search-bar"><div class="layui-form layui-inline">';
+            html += '<div class="layui-inline"><input type="text" id="audit-search-user" placeholder="用户名" class="layui-input" style="width:120px;"></div>';
+            html += '<div class="layui-inline"><select id="audit-search-type"><option value="">所有类型</option><option value="create">创建</option><option value="update">更新</option><option value="delete">删除</option></select></div>';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-search-audit"><i class="layui-icon layui-icon-search"></i> 搜索</button></div>';
+            html += '<div class="layui-inline"><button class="layui-btn layui-btn-primary" id="btn-export-audit"><i class="layui-icon layui-icon-export"></i> 导出</button></div>';
+            html += '</div></div>';
+            html += '<div class="admin-card"><table class="layui-hide" id="audit-table" lay-filter="audit-table"></table></div>';
+
+            container.innerHTML = html;
+
+            table.render({
+                elem: '#audit-table',
+                url: API_BASE + '/audit-logs',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                page: true,
+                limit: 20,
+                cols: [[
+                    { field: 'id', title: 'ID', width: 60 },
+                    { field: 'username', title: '用户', width: 100 },
+                    { field: 'action', title: '操作', minWidth: 120 },
+                    { field: 'resource_table', title: '资源表', width: 100 },
+                    { field: 'change_type', title: '类型', width: 80, templet: function(d) {
+                        var types = { create: '<span class="layui-badge layui-bg-green">创建</span>', update: '<span class="layui-badge layui-bg-blue">更新</span>', delete: '<span class="layui-badge layui-bg-red">删除</span>' };
+                        return types[d.change_type] || d.change_type;
+                    }},
+                    { field: 'ip', title: 'IP', width: 120 },
+                    { field: 'created_at', title: '时间', width: 160 },
+                    { title: '操作', width: 80, toolbar: '#audit-toolbar' }
+                ]],
+                parseData: function(res) {
+                    return {
+                        code: res.code === 0 ? 0 : res.code,
+                        msg: res.message,
+                        count: res.data ? res.data.total : 0,
+                        data: res.data ? (res.data.items || res.data.list || []) : []
+                    };
+                }
+            });
+
+            var oldTb = document.getElementById('audit-toolbar'); if (oldTb) oldTb.remove();
+            var toolbar = document.createElement('script');
+            toolbar.type = 'text/html';
+            toolbar.id = 'audit-toolbar';
+            toolbar.textContent = '<a class="layui-btn layui-btn-xs" lay-event="detail">详情</a>';
+            document.body.appendChild(toolbar);
+
+            table.on('tool(audit-table)', function(obj) {
+                if (obj.event === 'detail') {
+                    showAuditDetail(obj.data);
+                }
+            });
+
+            document.getElementById('btn-search-audit').addEventListener('click', function() {
+                table.reload('audit-table', {
+                    where: {
+                        username: document.getElementById('audit-search-user').value,
+                        change_type: document.getElementById('audit-search-type').value
+                    }
+                });
+            });
+
+            document.getElementById('btn-export-audit').addEventListener('click', function() {
+                window.open(API_BASE + '/audit-logs/export?token=' + localStorage.getItem('token'));
+            });
+        }
+
+        function showAuditDetail(log) {
+            var html = '<div class="form-dialog" style="padding:16px;">';
+            html += '<div style="margin-bottom:16px;"><strong>操作信息</strong></div>';
+            html += '<table class="layui-table" style="margin-bottom:16px;">';
+            html += '<tr><td width="100">用户</td><td>' + esc(log.username) + '</td></tr>';
+            html += '<tr><td>操作</td><td>' + esc(log.action) + '</td></tr>';
+            html += '<tr><td>资源表</td><td>' + esc(log.resource_table || '-') + '</td></tr>';
+            html += '<tr><td>变更类型</td><td>' + esc(log.change_type || '-') + '</td></tr>';
+            html += '<tr><td>IP地址</td><td>' + esc(log.ip) + '</td></tr>';
+            html += '<tr><td>时间</td><td>' + esc(log.created_at) + '</td></tr>';
+            html += '</table>';
+
+            if (log.old_data || log.new_data) {
+                html += '<div style="margin-bottom:16px;"><strong>数据变更</strong></div>';
+                html += '<div style="display:flex;gap:16px;">';
+                html += '<div style="flex:1;"><div style="font-weight:bold;margin-bottom:8px;">变更前</div>';
+                html += '<pre style="background:#f5f5f5;padding:12px;overflow:auto;max-height:300px;font-size:12px;">' + esc(log.old_data || '无') + '</pre></div>';
+                html += '<div style="flex:1;"><div style="font-weight:bold;margin-bottom:8px;">变更后</div>';
+                html += '<pre style="background:#f5f5f5;padding:12px;overflow:auto;max-height:300px;font-size:12px;">' + esc(log.new_data || '无') + '</pre></div>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            layer.open({
+                type: 1,
+                title: '审计日志详情',
+                area: ['700px', '500px'],
+                content: html
+            });
+        }
+
+        // ====== 顶部菜单切换 ======
+        element.on('nav(top-menu)', function(elem) {
+            var module = elem.parent().attr('data-module');
+            renderSideMenu(module);
+            var config = menuConfig[module];
+            if (config && config.items.length > 0) {
+                var firstItem = document.querySelector('#side-menu-content .sidebar-menu-item');
+                if (firstItem) {
+                    firstItem.classList.add('active');
+                    loadPage(config.items[0].page);
+                }
+            }
+        });
+
+        // ====== 初始化 ======
+        loadCurrentUser();
+        loadPermissions();
+        renderSideMenu('dashboard');
+        var firstItem = document.querySelector('#side-menu-content .sidebar-menu-item');
+        if (firstItem) firstItem.classList.add('active');
+        loadPage('dashboard');
+    });
+    </script>
+</body>
+</html>

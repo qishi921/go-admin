@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>角色管理 - Gai Admin</title>
+    <link rel="stylesheet" href="/layui/css/layui.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="layui-layout-body">
+    <div class="layui-layout layui-layout-admin">
+        <div class="layui-header">
+            <div class="layui-logo"><div class="logo-icon"><i class="layui-icon layui-icon-home"></i></div><span>Gai Admin</span></div>
+            <ul class="layui-nav top-menu">
+                <li class="layui-nav-item"><a href="/pages/dashboard/index.html"><i class="layui-icon layui-icon-chart"></i><cite>数据看板</cite></a></li>
+                <li class="layui-nav-item layui-this"><a href="/pages/system/users.html"><i class="layui-icon layui-icon-set"></i><cite>系统管理</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/data/export.html"><i class="layui-icon layui-icon-table"></i><cite>数据管理</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/logs/operation.html"><i class="layui-icon layui-icon-log"></i><cite>日志管理</cite></a></li>
+            </ul>
+            <ul class="layui-nav layui-layout-right">
+                <li style="line-height:56px;padding-right:8px;">
+                    <a class="theme-toggle" id="theme-toggle" href="javascript:;" title="切换主题">
+                        <i class="layui-icon layui-icon-moon"></i>
+                    </a>
+                </li>
+                <li class="layui-nav-item"><a href="javascript:;"><img src="https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxko.png" class="layui-nav-img"><span id="username">Admin</span></a>
+                    <dl class="layui-nav-child"><dd><a href="/pages/dashboard/profile.html">个人中心</a></dd><dd><a href="javascript:;" id="btn-logout" style="color:#ff4d4f;">退出登录</a></dd></dl>
+                </li>
+            </ul>
+        </div>
+        <div class="layui-side layui-side-menu">
+            <div class="layui-side-scroll">
+                <ul class="sidebar-menu">
+                    <li class="sidebar-menu-item"><a href="/pages/system/users.html"><i class="layui-icon layui-icon-username"></i> 用户管理</a></li>
+                    <li class="sidebar-menu-item active"><a href="/pages/system/roles.html"><i class="layui-icon layui-icon-group"></i> 角色管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/menus.html"><i class="layui-icon layui-icon-menu-fill"></i> 菜单管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/permissions.html"><i class="layui-icon layui-icon-auz"></i> 权限管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/uploads.html"><i class="layui-icon layui-icon-picture"></i> 文件管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/tasks.html"><i class="layui-icon layui-icon-time"></i> 定时任务</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/settings.html"><i class="layui-icon layui-icon-set"></i> 系统设置</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="layui-body">
+            <div class="layui-fluid">
+                <div class="search-bar">
+                    <div class="layui-form layui-inline">
+                        <div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-add"><i class="layui-icon layui-icon-add-1"></i> 新增角色</button></div>
+                    </div>
+                </div>
+                <div class="admin-card"><table class="layui-hide" id="data-table" lay-filter="data-table"></table></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/html" id="toolbar-tpl">
+        <a class="layui-btn layui-btn-xs" lay-event="edit">编辑</a>
+        <a class="layui-btn layui-btn-normal layui-btn-xs" lay-event="perms">权限</a>
+        <a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>
+    </script>
+
+    <script src="/layui/layui.js"></script>
+    <script src="/js/common.js"></script>
+    <script>
+    layui.use(['element', 'layer', 'table', 'form'], function(){
+        var table = layui.table, layer = layui.layer, form = layui.form;
+        if (!checkAuth()) return;
+        loadCurrentUser();
+
+        table.render({
+            elem: '#data-table',
+            url: API_BASE + '/roles',
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+            page: true,
+            limit: 20,
+            cols: [[
+                { field: 'id', title: 'ID', width: 60 },
+                { field: 'name', title: '名称', width: 150 },
+                { field: 'code', title: '代码', width: 120 },
+                { field: 'description', title: '描述', minWidth: 200 },
+                { field: 'status', title: '状态', width: 80, templet: function(d){ return d.status === 'active' ? '<span class="layui-badge layui-bg-green">正常</span>' : '<span class="layui-badge layui-bg-gray">禁用</span>'; } },
+                { title: '操作', width: 180, toolbar: '#toolbar-tpl' }
+            ]],
+            parseData: function(res){ return { code: res.code === 0 ? 0 : res.code, msg: res.message, count: res.data ? res.data.total : 0, data: res.data ? (res.data.items || res.data.list || []) : [] }; }
+        });
+
+        document.getElementById('btn-add').addEventListener('click', function(){ openForm('新增角色', {}); });
+
+        table.on('tool(data-table)', function(obj){
+            var data = obj.data;
+            if (obj.event === 'edit') { openForm('编辑角色', data); }
+            else if (obj.event === 'perms') { openPermsDialog(data); }
+            else if (obj.event === 'del') {
+                layer.confirm('确定删除该角色？', function(idx){
+                    request('/roles/' + data.id, { method: 'DELETE' }).then(function(res){
+                        if (res.code === 0) { showSuccess('删除成功'); obj.del(); } else { showError(res.message); }
+                        layer.close(idx);
+                    });
+                });
+            }
+        });
+
+        // 权限分配对话框
+        function openPermsDialog(role) {
+            // 获取所有权限
+            request('/permissions?per_page=100').then(function(res) {
+                if (res.code !== 0) {
+                    showError('获取权限列表失败');
+                    return;
+                }
+                var allPerms = res.data.items || res.data.list || [];
+
+                // 获取角色当前权限
+                request('/roles/' + role.id + '/permissions').then(function(res2) {
+                    var rolePerms = res2.code === 0 ? (res2.data || []) : [];
+                    var rolePermIds = rolePerms.map(function(p) { return p.id; });
+
+                    var html = '<div style="padding:20px;"><div class="layui-form">';
+                    html += '<div style="margin-bottom:10px;"><button type="button" class="layui-btn layui-btn-primary layui-btn-sm" id="select-all-perms">全选</button>';
+                    html += ' <button type="button" class="layui-btn layui-btn-primary layui-btn-sm" id="unselect-all-perms">取消全选</button></div>';
+
+                    allPerms.forEach(function(perm) {
+                        var checked = rolePermIds.indexOf(perm.id) !== -1 ? ' checked' : '';
+                        html += '<div style="display:inline-block;width:200px;margin-bottom:8px;">';
+                        html += '<input type="checkbox" name="perm_ids" value="' + perm.id + '" title="' + esc(perm.name) + '"' + checked + ' lay-skin="primary">';
+                        html += '<span style="margin-left:5px;">' + esc(perm.name) + '</span>';
+                        html += '<span style="color:#999;font-size:12px;margin-left:5px;">' + esc(perm.code || '') + '</span>';
+                        html += '</div>';
+                    });
+
+                    html += '</div></div>';
+
+                    layer.open({
+                        type: 1,
+                        title: '分配权限 - ' + esc(role.name),
+                        area: ['600px', '500px'],
+                        content: html,
+                        btn: ['保存', '取消'],
+                        success: function() {
+                            form.render('checkbox');
+                            document.getElementById('select-all-perms').onclick = function() {
+                                document.querySelectorAll('input[name="perm_ids"]').forEach(function(cb) { cb.checked = true; });
+                                form.render('checkbox');
+                            };
+                            document.getElementById('unselect-all-perms').onclick = function() {
+                                document.querySelectorAll('input[name="perm_ids"]').forEach(function(cb) { cb.checked = false; });
+                                form.render('checkbox');
+                            };
+                        },
+                        yes: function(index) {
+                            var permIds = [];
+                            document.querySelectorAll('input[name="perm_ids"]:checked').forEach(function(cb) {
+                                permIds.push(parseInt(cb.value));
+                            });
+
+                            request('/roles/' + role.id + '/permissions', {
+                                method: 'PUT',
+                                body: JSON.stringify({ permission_ids: permIds })
+                            }).then(function(res) {
+                                if (res.code === 0) {
+                                    showSuccess('权限分配成功');
+                                    layer.close(index);
+                                } else {
+                                    showError(res.message || '权限分配失败');
+                                }
+                            });
+                        }
+                    });
+                });
+            });
+        }
+
+        function openForm(title, data){
+            var html = '<form class="layui-form" lay-filter="form" style="padding:20px;">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">名称</label><div class="layui-input-block"><input type="text" name="name" value="' + esc(data.name || '') + '" class="layui-input" required></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">代码</label><div class="layui-input-block"><input type="text" name="code" value="' + esc(data.code || '') + '" class="layui-input" required></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">描述</label><div class="layui-input-block"><input type="text" name="description" value="' + esc(data.description || '') + '" class="layui-input"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">状态</label><div class="layui-input-block"><select name="status"><option value="active"' + (data.status === 'active' || !data.id ? ' selected' : '') + '>正常</option><option value="inactive"' + (data.status === 'inactive' ? ' selected' : '') + '>禁用</option></select></div></div>';
+            html += '</form>';
+            layer.open({
+                type: 1, title: title, area: ['400px'], content: html, btn: ['保存', '取消'],
+                success: function(){ form.render(); },
+                yes: function(index){
+                    var formData = {};
+                    document.querySelectorAll('form [name]').forEach(function(el){ formData[el.name] = el.value; });
+                    var url = data.id ? '/roles/' + data.id : '/roles';
+                    request(url, { method: data.id ? 'PUT' : 'POST', body: JSON.stringify(formData) }).then(function(res){
+                        if (res.code === 0) { showSuccess('保存成功'); layer.close(index); table.reload('data-table'); }
+                        else { showError(res.message); }
+                    });
+                }
+            });
+        }
+
+        // 主题切换
+        document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+        if (document.documentElement.classList.contains('dark-mode')) {
+            document.getElementById('theme-toggle').innerHTML = '<i class="layui-icon layui-icon-light"></i>';
+        }
+
+        document.getElementById('btn-logout').addEventListener('click', function(){
+            layer.confirm('确定退出登录？', function(idx){ localStorage.removeItem('token'); window.location.href = '/login'; });
+        });
+    });
+    </script>
+</body>
+</html>

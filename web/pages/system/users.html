@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 - Gai Admin</title>
+    <link rel="stylesheet" href="/layui/css/layui.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="layui-layout-body">
+    <div class="layui-layout layui-layout-admin">
+        <!-- 顶部导航 -->
+        <div class="layui-header">
+            <div class="layui-logo"><div class="logo-icon"><i class="layui-icon layui-icon-home"></i></div><span>Gai Admin</span></div>
+            <ul class="layui-nav top-menu" lay-filter="top-menu">
+                <li class="layui-nav-item" data-module="dashboard"><a href="/pages/dashboard/index.html"><i class="layui-icon layui-icon-chart"></i><cite>数据看板</cite></a></li>
+                <li class="layui-nav-item layui-this" data-module="system"><a href="/pages/system/users.html"><i class="layui-icon layui-icon-set"></i><cite>系统管理</cite></a></li>
+                <li class="layui-nav-item" data-module="data"><a href="/pages/data/export.html"><i class="layui-icon layui-icon-table"></i><cite>数据管理</cite></a></li>
+                <li class="layui-nav-item" data-module="logs"><a href="/pages/logs/operation.html"><i class="layui-icon layui-icon-log"></i><cite>日志管理</cite></a></li>
+            </ul>
+            <ul class="layui-nav layui-layout-right">
+                <li style="line-height:56px;padding-right:8px;">
+                    <a class="theme-toggle" id="theme-toggle" href="javascript:;" title="切换主题">
+                        <i class="layui-icon layui-icon-moon"></i>
+                    </a>
+                </li>
+                <li class="layui-nav-item">
+                    <a href="javascript:;"><img src="https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxko.png" class="layui-nav-img"><span id="username">Admin</span></a>
+                    <dl class="layui-nav-child">
+                        <dd><a href="/pages/dashboard/profile.html">个人中心</a></dd>
+                        <dd><a href="javascript:;" id="btn-logout" style="color: #ff4d4f;">退出登录</a></dd>
+                    </dl>
+                </li>
+            </ul>
+        </div>
+
+        <!-- 左侧菜单 -->
+        <div class="layui-side layui-side-menu">
+            <div class="layui-side-scroll">
+                <ul class="sidebar-menu">
+                    <li class="sidebar-menu-item active" data-page="users"><a href="/pages/system/users.html"><i class="layui-icon layui-icon-username"></i> 用户管理</a></li>
+                    <li class="sidebar-menu-item" data-page="roles"><a href="/pages/system/roles.html"><i class="layui-icon layui-icon-group"></i> 角色管理</a></li>
+                    <li class="sidebar-menu-item" data-page="menus"><a href="/pages/system/menus.html"><i class="layui-icon layui-icon-menu-fill"></i> 菜单管理</a></li>
+                    <li class="sidebar-menu-item" data-page="permissions"><a href="/pages/system/permissions.html"><i class="layui-icon layui-icon-auz"></i> 权限管理</a></li>
+                    <li class="sidebar-menu-item" data-page="uploads"><a href="/pages/system/uploads.html"><i class="layui-icon layui-icon-picture"></i> 文件管理</a></li>
+                    <li class="sidebar-menu-item" data-page="tasks"><a href="/pages/system/tasks.html"><i class="layui-icon layui-icon-time"></i> 定时任务</a></li>
+                    <li class="sidebar-menu-item" data-page="settings"><a href="/pages/system/settings.html"><i class="layui-icon layui-icon-set"></i> 系统设置</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 主体内容 -->
+        <div class="layui-body">
+            <div class="layui-fluid">
+                <div class="search-bar">
+                    <div class="layui-form layui-inline">
+                        <div class="layui-inline"><input type="text" id="user-search" placeholder="搜索用户名/邮箱/姓名" class="layui-input" style="width:200px;"></div>
+                        <div class="layui-inline">
+                            <select id="status-filter" lay-filter="status-filter">
+                                <option value="">全部状态</option>
+                                <option value="active">正常</option>
+                                <option value="inactive">禁用</option>
+                            </select>
+                        </div>
+                        <div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-search"><i class="layui-icon layui-icon-search"></i> 搜索</button></div>
+                        <div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-add"><i class="layui-icon layui-icon-add-1"></i> 新增用户</button></div>
+                    </div>
+                </div>
+                <div class="admin-card">
+                    <table class="layui-hide" id="data-table" lay-filter="data-table"></table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/html" id="status-tpl">
+        {{# if(d.status === 'active'){ }}
+        <span class="layui-badge layui-bg-green">正常</span>
+        {{# } else { }}
+        <span class="layui-badge layui-bg-gray">禁用</span>
+        {{# } }}
+    </script>
+    <script type="text/html" id="toolbar-tpl">
+        <a class="layui-btn layui-btn-xs" lay-event="edit">编辑</a>
+        <a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>
+    </script>
+
+    <script src="/layui/layui.js"></script>
+    <script src="/js/common.js"></script>
+    <script>
+    layui.use(['element', 'layer', 'table', 'form'], function(){
+        var table = layui.table;
+        var layer = layui.layer;
+        var form = layui.form;
+
+        if (!checkAuth()) return;
+        loadCurrentUser();
+
+        // 渲染表格
+        table.render({
+            elem: '#data-table',
+            url: API_BASE + '/users',
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+            page: true,
+            limit: 20,
+            cols: [[
+                { field: 'id', title: 'ID', width: 60 },
+                { field: 'username', title: '用户名', width: 120 },
+                { field: 'email', title: '邮箱', minWidth: 180 },
+                { field: 'phone', title: '电话', width: 120 },
+                { field: 'status', title: '状态', width: 80, templet: '#status-tpl' },
+                { field: 'created_at', title: '创建时间', width: 160 },
+                { title: '操作', width: 120, toolbar: '#toolbar-tpl' }
+            ]],
+            parseData: function(res) {
+                return {
+                    code: res.code === 0 ? 0 : res.code,
+                    msg: res.message,
+                    count: res.data ? res.data.total : 0,
+                    data: res.data ? (res.data.items || res.data.list || []) : []
+                };
+            }
+        });
+
+        // 搜索
+        document.getElementById('btn-search').addEventListener('click', function() {
+            table.reload('data-table', {
+                where: {
+                    search: document.getElementById('user-search').value,
+                    status: document.getElementById('status-filter').value
+                }
+            });
+        });
+
+        // 新增
+        document.getElementById('btn-add').addEventListener('click', function() {
+            openForm('新增用户', {});
+        });
+
+        // 表格工具条
+        table.on('tool(data-table)', function(obj) {
+            var data = obj.data;
+            if (obj.event === 'edit') {
+                openForm('编辑用户', data);
+            } else if (obj.event === 'del') {
+                layer.confirm('确定删除该用户？', function(idx) {
+                    request('/users/' + data.id, { method: 'DELETE' }).then(function(res) {
+                        if (res.code === 0) {
+                            showSuccess('删除成功');
+                            obj.del();
+                        } else {
+                            showError(res.message || '删除失败');
+                        }
+                        layer.close(idx);
+                    });
+                });
+            }
+        });
+
+        // 打开表单
+        function openForm(title, data) {
+            var html = '<form class="layui-form" lay-filter="form" style="padding:20px;">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">用户名</label><div class="layui-input-block"><input type="text" name="username" value="' + esc(data.username || '') + '" class="layui-input" required></div></div>';
+            if (!data.id) {
+                html += '<div class="layui-form-item"><label class="layui-form-label">密码</label><div class="layui-input-block"><input type="password" name="password" id="form-password" class="layui-input" required placeholder="至少8位，包含字母和数字"><div class="layui-form-mid layui-word-aux" style="margin-left:0;">密码至少8位，必须包含字母和数字</div></div></div>';
+            } else {
+                html += '<div class="layui-form-item"><label class="layui-form-label">新密码</label><div class="layui-input-block"><input type="password" name="password" id="form-password" class="layui-input" placeholder="留空则不修改"><div class="layui-form-mid layui-word-aux" style="margin-left:0;">密码至少8位，必须包含字母和数字</div></div></div>';
+            }
+            html += '<div class="layui-form-item"><label class="layui-form-label">邮箱</label><div class="layui-input-block"><input type="text" name="email" value="' + esc(data.email || '') + '" class="layui-input" required></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">电话</label><div class="layui-input-block"><input type="text" name="phone" value="' + esc(data.phone || '') + '" class="layui-input"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">状态</label><div class="layui-input-block"><select name="status"><option value="active"' + (data.status === 'active' ? ' selected' : '') + '>正常</option><option value="inactive"' + (data.status === 'inactive' ? ' selected' : '') + '>禁用</option></select></div></div>';
+            html += '</form>';
+
+            layer.open({
+                type: 1,
+                title: title,
+                area: ['450px'],
+                content: html,
+                btn: ['保存', '取消'],
+                success: function() { form.render(); },
+                yes: function(index) {
+                    var formData = {};
+                    document.querySelectorAll('form [name]').forEach(function(el) {
+                        formData[el.name] = el.value;
+                    });
+
+                    // 密码验证
+                    var passwordEl = document.getElementById('form-password');
+                    if (passwordEl && passwordEl.value) {
+                        var pwd = passwordEl.value;
+                        if (pwd.length < 8) {
+                            showError('密码至少需要8个字符');
+                            return;
+                        }
+                        var hasLetter = /[a-zA-Z]/.test(pwd);
+                        var hasDigit = /[0-9]/.test(pwd);
+                        if (!hasLetter || !hasDigit) {
+                            showError('密码必须包含字母和数字');
+                            return;
+                        }
+                        // 检查常见弱密码
+                        var weakPasswords = ['123456', 'password', '12345678', 'qwerty', 'admin', 'admin123'];
+                        if (weakPasswords.indexOf(pwd.toLowerCase()) !== -1) {
+                            showError('密码过于简单，请使用更复杂的密码');
+                            return;
+                        }
+                    }
+
+                    // 新增用户必须填写密码
+                    if (!data.id && !formData.password) {
+                        showError('请输入密码');
+                        return;
+                    }
+
+                    var url = data.id ? '/users/' + data.id : '/users';
+                    var method = data.id ? 'PUT' : 'POST';
+
+                    request(url, { method: method, body: JSON.stringify(formData) }).then(function(res) {
+                        if (res.code === 0) {
+                            showSuccess('保存成功');
+                            layer.close(index);
+                            table.reload('data-table');
+                        } else {
+                            showError(res.message || '保存失败');
+                        }
+                    });
+                }
+            });
+        }
+
+        // 主题切换
+        document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+        if (document.documentElement.classList.contains('dark-mode')) {
+            document.getElementById('theme-toggle').innerHTML = '<i class="layui-icon layui-icon-light"></i>';
+        }
+
+        // 退出
+        document.getElementById('btn-logout').addEventListener('click', function() {
+            layer.confirm('确定退出登录？', function(idx) {
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+            });
+        });
+    });
+    </script>
+</body>
+</html>

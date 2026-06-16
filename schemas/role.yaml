@@ -1,0 +1,31 @@
+model: Role
+table: roles
+fields:
+  - name: name
+    type: string
+    size: 50
+    rules: required|min:2|max:50
+  - name: code
+    type: string
+    size: 50
+    unique: true
+    rules: required|min:2|max:50
+  - name: description
+    type: string
+    size: 255
+    nullable: true
+  - name: status
+    type: enum
+    values: [active, inactive]
+    default: "'active'"
+
+api:
+  prefix: /api/v1/roles
+  actions: [index, show, store, update, destroy]
+  auth: jwt
+
+relations:
+  - type: hasMany
+    model: User
+  - type: hasMany
+    model: Permission

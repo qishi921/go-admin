@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设置 - Gai Admin</title>
+    <link rel="stylesheet" href="/layui/css/layui.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="layui-layout-body">
+    <div class="layui-layout layui-layout-admin">
+        <div class="layui-header">
+            <div class="layui-logo"><div class="logo-icon"><i class="layui-icon layui-icon-home"></i></div><span>Gai Admin</span></div>
+            <ul class="layui-nav top-menu">
+                <li class="layui-nav-item"><a href="/pages/dashboard/index.html"><i class="layui-icon layui-icon-chart"></i><cite>数据看板</cite></a></li>
+                <li class="layui-nav-item layui-this"><a href="/pages/system/users.html"><i class="layui-icon layui-icon-set"></i><cite>系统管理</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/data/export.html"><i class="layui-icon layui-icon-table"></i><cite>数据管理</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/logs/operation.html"><i class="layui-icon layui-icon-log"></i><cite>日志管理</cite></a></li>
+            </ul>
+            <ul class="layui-nav layui-layout-right">
+                <li style="line-height:56px;padding-right:8px;">
+                    <a class="theme-toggle" id="theme-toggle" href="javascript:;" title="切换主题">
+                        <i class="layui-icon layui-icon-moon"></i>
+                    </a>
+                </li>
+                <li class="layui-nav-item"><a href="javascript:;"><img src="https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxko.png" class="layui-nav-img"><span id="username">Admin</span></a>
+                    <dl class="layui-nav-child"><dd><a href="javascript:;" id="btn-logout" style="color:#ff4d4f;">退出登录</a></dd></dl>
+                </li>
+            </ul>
+        </div>
+        <div class="layui-side layui-side-menu">
+            <div class="layui-side-scroll">
+                <ul class="sidebar-menu">
+                    <li class="sidebar-menu-item"><a href="/pages/system/users.html"><i class="layui-icon layui-icon-username"></i> 用户管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/roles.html"><i class="layui-icon layui-icon-group"></i> 角色管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/menus.html"><i class="layui-icon layui-icon-menu-fill"></i> 菜单管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/permissions.html"><i class="layui-icon layui-icon-auz"></i> 权限管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/uploads.html"><i class="layui-icon layui-icon-picture"></i> 文件管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/tasks.html"><i class="layui-icon layui-icon-time"></i> 定时任务</a></li>
+                    <li class="sidebar-menu-item active"><a href="/pages/system/settings.html"><i class="layui-icon layui-icon-set"></i> 系统设置</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="layui-body">
+            <div class="layui-fluid">
+                <div class="admin-card">
+                    <div class="admin-card-title">系统设置</div>
+                    <div id="settings-form" style="max-width:600px;padding:20px;">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">站点名称</label>
+                            <div class="layui-input-block">
+                                <input type="text" name="site_name" id="site_name" class="layui-input" placeholder="请输入站点名称">
+                            </div>
+                        </div>
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">站点描述</label>
+                            <div class="layui-input-block">
+                                <textarea name="site_description" id="site_description" class="layui-textarea" placeholder="请输入站点描述"></textarea>
+                            </div>
+                        </div>
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">联系邮箱</label>
+                            <div class="layui-input-block">
+                                <input type="text" name="contact_email" id="contact_email" class="layui-input" placeholder="请输入联系邮箱">
+                            </div>
+                        </div>
+                        <div class="layui-form-item">
+                            <div class="layui-input-block">
+                                <button class="layui-btn layui-btn-normal" id="btn-save">保存设置</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/layui/layui.js"></script>
+    <script src="/js/common.js"></script>
+    <script>
+    layui.use(['element', 'layer', 'form'], function(){
+        var layer = layui.layer;
+        if (!checkAuth()) return;
+        loadCurrentUser();
+
+        // 加载设置
+        request('/settings').then(function(res){
+            if (res.code === 0 && res.data) {
+                var items = res.data.items || res.data || [];
+                items.forEach(function(item){
+                    var el = document.getElementById(item.key);
+                    if (el) el.value = item.value || '';
+                });
+            }
+        });
+
+        // 保存设置
+        document.getElementById('btn-save').addEventListener('click', function(){
+            var settings = [
+                { key: 'site_name', value: document.getElementById('site_name').value },
+                { key: 'site_description', value: document.getElementById('site_description').value },
+                { key: 'contact_email', value: document.getElementById('contact_email').value }
+            ];
+
+            var promises = settings.map(function(s){
+                return request('/settings/' + s.key, { method: 'PUT', body: JSON.stringify({ value: s.value }) });
+            });
+
+            Promise.all(promises).then(function(){
+                showSuccess('设置已保存');
+            });
+        });
+
+        // 主题切换
+        document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+        if (document.documentElement.classList.contains('dark-mode')) {
+            document.getElementById('theme-toggle').innerHTML = '<i class="layui-icon layui-icon-light"></i>';
+        }
+
+        document.getElementById('btn-logout').addEventListener('click', function(){
+            layer.confirm('确定退出登录？', function(idx){ localStorage.removeItem('token'); window.location.href = '/login'; });
+        });
+    });
+    </script>
+</body>
+</html>

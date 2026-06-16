@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据导入 - Gai Admin</title>
+    <link rel="stylesheet" href="/layui/css/layui.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="layui-layout-body">
+    <div class="layui-layout layui-layout-admin">
+        <div class="layui-header">
+            <div class="layui-logo"><div class="logo-icon"><i class="layui-icon layui-icon-home"></i></div><span>Gai Admin</span></div>
+            <ul class="layui-nav top-menu">
+                <li class="layui-nav-item"><a href="/pages/dashboard/index.html"><i class="layui-icon layui-icon-chart"></i><cite>数据看板</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/system/users.html"><i class="layui-icon layui-icon-set"></i><cite>系统管理</cite></a></li>
+                <li class="layui-nav-item layui-this"><a href="/pages/data/export.html"><i class="layui-icon layui-icon-table"></i><cite>数据管理</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/logs/operation.html"><i class="layui-icon layui-icon-log"></i><cite>日志管理</cite></a></li>
+            </ul>
+            <ul class="layui-nav layui-layout-right">
+                <li style="line-height:56px;padding-right:8px;">
+                    <a class="theme-toggle" id="theme-toggle" href="javascript:;" title="切换主题">
+                        <i class="layui-icon layui-icon-moon"></i>
+                    </a>
+                </li>
+                <li class="layui-nav-item"><a href="javascript:;"><img src="https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxko.png" class="layui-nav-img"><span id="username">Admin</span></a>
+                    <dl class="layui-nav-child"><dd><a href="javascript:;" id="btn-logout" style="color:#ff4d4f;">退出登录</a></dd></dl>
+                </li>
+            </ul>
+        </div>
+        <div class="layui-side layui-side-menu">
+            <div class="layui-side-scroll">
+                <ul class="sidebar-menu">
+                    <li class="sidebar-menu-item"><a href="/pages/data/export.html"><i class="layui-icon layui-icon-export"></i> 数据导出</a></li>
+                    <li class="sidebar-menu-item active"><a href="/pages/data/import.html"><i class="layui-icon layui-icon-upload-drag"></i> 数据导入</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="layui-body">
+            <div class="layui-fluid">
+                <div class="admin-card">
+                    <div class="admin-card-title">数据导入</div>
+                    <div style="padding:20px;max-width:600px;">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">数据表</label>
+                            <div class="layui-input-block">
+                                <select id="import-table">
+                                    <option value="users">用户表</option>
+                                    <option value="roles">角色表</option>
+                                    <option value="menus">菜单表</option>
+                                    <option value="permissions">权限表</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="layui-form-item">
+                            <div class="layui-input-block">
+                                <button class="layui-btn layui-btn-normal" id="btn-template"><i class="layui-icon layui-icon-download-circle"></i> 下载模板</button>
+                            </div>
+                        </div>
+                        <hr style="margin:20px 0;border-color:#eee;">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">选择文件</label>
+                            <div class="layui-input-block">
+                                <div class="layui-upload-drag" id="upload-area" style="padding:30px;text-align:center;border:2px dashed #e6e6e6;border-radius:4px;cursor:pointer;">
+                                    <i class="layui-icon layui-icon-upload" style="font-size:36px;color:#c0c0c0;"></i>
+                                    <p style="margin-top:10px;color:#999;">点击或拖拽CSV文件到此处</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="import-result" style="margin-top:16px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/layui/layui.js"></script>
+    <script src="/js/common.js"></script>
+    <script>
+    layui.use(['element', 'layer', 'form', 'upload'], function(){
+        var layer = layui.layer, form = layui.form, upload = layui.upload;
+        if (!checkAuth()) return;
+        loadCurrentUser();
+
+        form.render();
+
+        document.getElementById('btn-template').addEventListener('click', function(){
+            var table = document.getElementById('import-table').value;
+            var url = API_BASE + '/export/template?table=' + table + '&token=' + localStorage.getItem('token');
+            window.open(url, '_blank');
+        });
+
+        upload.render({
+            elem: '#upload-area',
+            url: API_BASE + '/import/csv',
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+            accept: 'file',
+            exts: 'csv',
+            data: function(){
+                return { table: document.getElementById('import-table').value };
+            },
+            before: function(){
+                document.getElementById('import-result').innerHTML = '<span style="color:#1890ff;">导入中...</span>';
+            },
+            done: function(res){
+                if (res.code === 0) {
+                    var msg = '导入成功';
+                    if (res.data && res.data.success !== undefined) {
+                        msg = '成功导入 ' + res.data.success + ' 条记录';
+                        if (res.data.failed > 0) {
+                            msg += '，失败 ' + res.data.failed + ' 条';
+                        }
+                    }
+                    document.getElementById('import-result').innerHTML = '<span style="color:#52c41a;"><i class="layui-icon layui-icon-ok-circle"></i> ' + msg + '</span>';
+                } else {
+                    document.getElementById('import-result').innerHTML = '<span style="color:#ff4d4f;"><i class="layui-icon layui-icon-close-fill"></i> ' + esc(res.message || '导入失败') + '</span>';
+                }
+            },
+            error: function(){
+                document.getElementById('import-result').innerHTML = '<span style="color:#ff4d4f;">上传失败</span>';
+            }
+        });
+
+        // 主题切换
+        document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+        if (document.documentElement.classList.contains('dark-mode')) {
+            document.getElementById('theme-toggle').innerHTML = '<i class="layui-icon layui-icon-light"></i>';
+        }
+
+        document.getElementById('btn-logout').addEventListener('click', function(){
+            layer.confirm('确定退出登录？', function(idx){ localStorage.removeItem('token'); window.location.href = '/login'; });
+        });
+    });
+    </script>
+</body>
+</html>

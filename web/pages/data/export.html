@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据导出 - Gai Admin</title>
+    <link rel="stylesheet" href="/layui/css/layui.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="layui-layout-body">
+    <div class="layui-layout layui-layout-admin">
+        <div class="layui-header">
+            <div class="layui-logo"><div class="logo-icon"><i class="layui-icon layui-icon-home"></i></div><span>Gai Admin</span></div>
+            <ul class="layui-nav top-menu">
+                <li class="layui-nav-item"><a href="/pages/dashboard/index.html"><i class="layui-icon layui-icon-chart"></i><cite>数据看板</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/system/users.html"><i class="layui-icon layui-icon-set"></i><cite>系统管理</cite></a></li>
+                <li class="layui-nav-item layui-this"><a href="/pages/data/export.html"><i class="layui-icon layui-icon-table"></i><cite>数据管理</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/logs/operation.html"><i class="layui-icon layui-icon-log"></i><cite>日志管理</cite></a></li>
+            </ul>
+            <ul class="layui-nav layui-layout-right">
+                <li style="line-height:56px;padding-right:8px;">
+                    <a class="theme-toggle" id="theme-toggle" href="javascript:;" title="切换主题">
+                        <i class="layui-icon layui-icon-moon"></i>
+                    </a>
+                </li>
+                <li class="layui-nav-item"><a href="javascript:;"><img src="https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxko.png" class="layui-nav-img"><span id="username">Admin</span></a>
+                    <dl class="layui-nav-child"><dd><a href="javascript:;" id="btn-logout" style="color:#ff4d4f;">退出登录</a></dd></dl>
+                </li>
+            </ul>
+        </div>
+        <div class="layui-side layui-side-menu">
+            <div class="layui-side-scroll">
+                <ul class="sidebar-menu">
+                    <li class="sidebar-menu-item active"><a href="/pages/data/export.html"><i class="layui-icon layui-icon-export"></i> 数据导出</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/data/import.html"><i class="layui-icon layui-icon-upload-drag"></i> 数据导入</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="layui-body">
+            <div class="layui-fluid">
+                <div class="admin-card">
+                    <div class="admin-card-title">数据导出</div>
+                    <div style="padding:20px;max-width:600px;">
+                        <form class="layui-form">
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">数据表</label>
+                                <div class="layui-input-block">
+                                    <select name="table" id="export-table">
+                                        <option value="users">用户表</option>
+                                        <option value="roles">角色表</option>
+                                        <option value="menus">菜单表</option>
+                                        <option value="permissions">权限表</option>
+                                        <option value="logs">操作日志</option>
+                                        <option value="notifications">通知表</option>
+                                        <option value="scheduled_tasks">定时任务</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">导出格式</label>
+                                <div class="layui-input-block">
+                                    <input type="radio" name="format" value="csv" title="CSV" checked>
+                                    <input type="radio" name="format" value="json" title="JSON">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <div class="layui-input-block">
+                                    <button class="layui-btn layui-btn-normal" id="btn-export"><i class="layui-icon layui-icon-export"></i> 开始导出</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/layui/layui.js"></script>
+    <script src="/js/common.js"></script>
+    <script>
+    layui.use(['element', 'layer', 'form'], function(){
+        var layer = layui.layer, form = layui.form;
+        if (!checkAuth()) return;
+        loadCurrentUser();
+
+        form.render();
+
+        document.getElementById('btn-export').addEventListener('click', function(){
+            var table = document.getElementById('export-table').value;
+            var format = document.querySelector('input[name="format"]:checked').value;
+
+            layer.msg('正在导出，请稍候...', {icon: 16, time: 0});
+
+            request('/export/' + format + '?table=' + table, { method: 'POST' }).then(function(res) {
+                layer.closeAll();
+                if (res.code === 0 && res.data && res.data.file) {
+                    // 下载文件
+                    var downloadUrl = res.data.file + '?token=' + localStorage.getItem('token');
+                    var a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = table + '.' + format;
+                    a.click();
+                    showSuccess('导出成功');
+                } else {
+                    showError(res.message || '导出失败');
+                }
+            }).catch(function() {
+                layer.closeAll();
+                showError('导出失败');
+            });
+        });
+
+        // 主题切换
+        document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+        if (document.documentElement.classList.contains('dark-mode')) {
+            document.getElementById('theme-toggle').innerHTML = '<i class="layui-icon layui-icon-light"></i>';
+        }
+
+        document.getElementById('btn-logout').addEventListener('click', function(){
+            layer.confirm('确定退出登录？', function(idx){ localStorage.removeItem('token'); window.location.href = '/login'; });
+        });
+    });
+    </script>
+</body>
+</html>

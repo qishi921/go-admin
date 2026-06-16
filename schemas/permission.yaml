@@ -1,0 +1,39 @@
+model: Permission
+table: permissions
+fields:
+  - name: name
+    type: string
+    size: 50
+    rules: required|min:2|max:50
+  - name: code
+    type: string
+    size: 50
+    unique: true
+    rules: required|min:2|max:50
+  - name: description
+    type: string
+    size: 255
+    nullable: true
+  - name: type
+    type: enum
+    values: [menu, button, api]
+    default: "'menu'"
+  - name: parent_id
+    type: int
+    nullable: true
+  - name: sort_order
+    type: int
+    default: "0"
+  - name: status
+    type: enum
+    values: [active, inactive]
+    default: "'active'"
+
+api:
+  prefix: /api/v1/permissions
+  actions: [index, show, store, update, destroy]
+  auth: jwt
+
+relations:
+  - type: belongsTo
+    model: Role

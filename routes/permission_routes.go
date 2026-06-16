@@ -1,0 +1,25 @@
+package routes
+
+import (
+	"github.com/Hlgxz/gai/auth"
+	"github.com/Hlgxz/gai/database/orm"
+	"github.com/Hlgxz/gai/router"
+	"github.com/user/admin-system/app/controllers"
+	"github.com/user/admin-system/app/middleware"
+)
+
+// RegisterPermissionRoutes sets up the Permission resource routes.
+func RegisterPermissionRoutes(r *router.Router, db *orm.DB, authMgr *auth.Manager) {
+	ctrl := controllers.NewPermissionController(db)
+
+	r.Group("/api/v1/permissions", func(g *router.Group) {
+		g.Use(authMgr.Middleware("jwt"))
+		g.Use(middleware.RBACMiddleware(db))
+		g.Use(middleware.OperationLogMiddleware(db))
+		g.Get("", ctrl.Index)
+		g.Post("", ctrl.Store)
+		g.Get("/:id", ctrl.Show)
+		g.Put("/:id", ctrl.Update)
+		g.Delete("/:id", ctrl.Destroy)
+	})
+}

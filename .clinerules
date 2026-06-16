@@ -1,0 +1,12 @@
+# Cline / Roo Code Rules — Gai Framework
+#
+# Framework: github.com/Hlgxz/gai | Docs: https://github.com/Hlgxz/gai
+# MUST: import github.com/Hlgxz/gai/http as ghttp
+# Handler: func(c *ghttp.Context) — use c.Success(), c.Error(), c.JSON()
+# ORM: orm.Query[T](db), orm.Get[T](q), orm.Create[T](db, &item)
+# Model: embed orm.Model, use gai:"..." struct tags
+# Route: r.Get("/:param", h), r.Group(), r.Resource()
+# Middleware: return ghttp.HandlerFunc, call c.Next()
+# Validate: ghttp.NewValidator(data, rules) — pipe syntax required|email|min:5
+# Schema: YAML in schemas/ → gai generate --schema schemas/
+# See CLAUDE.md for full reference.

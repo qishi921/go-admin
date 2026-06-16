@@ -1,0 +1,22 @@
+name: admin-system
+port: 8080
+env: ${APP_ENV:development}
+debug: ${APP_DEBUG:true}
+
+database:
+  driver: ${DB_DRIVER:sqlite}
+  dsn: ${DB_DATABASE:storage/database.db}
+
+auth:
+  default: jwt
+  guards:
+    jwt:
+      driver: jwt
+      secret: ${JWT_SECRET}
+      ttl: ${JWT_TTL:7200}
+
+log:
+  level: ${LOG_LEVEL:info}
+  format: ${LOG_FORMAT:json}
+  file: ${LOG_FILE:storage/logs/app.log}
+  requests: ${LOG_REQUESTS:true}

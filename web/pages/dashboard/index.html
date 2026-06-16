@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页概览 - Gai Admin</title>
+    <link rel="stylesheet" href="/layui/css/layui.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="layui-layout-body">
+    <div class="layui-layout layui-layout-admin">
+        <!-- 顶部导航 -->
+        <div class="layui-header">
+            <div class="layui-logo">
+                <div class="logo-icon"><i class="layui-icon layui-icon-home"></i></div>
+                <span>Gai Admin</span>
+            </div>
+            <ul class="layui-nav top-menu" lay-filter="top-menu">
+                <li class="layui-nav-item layui-this" data-module="dashboard">
+                    <a href="/pages/dashboard/index.html"><i class="layui-icon layui-icon-chart"></i><cite>数据看板</cite></a>
+                </li>
+                <li class="layui-nav-item" data-module="system">
+                    <a href="/pages/system/users.html"><i class="layui-icon layui-icon-set"></i><cite>系统管理</cite></a>
+                </li>
+                <li class="layui-nav-item" data-module="data">
+                    <a href="/pages/data/export.html"><i class="layui-icon layui-icon-table"></i><cite>数据管理</cite></a>
+                </li>
+                <li class="layui-nav-item" data-module="logs">
+                    <a href="/pages/logs/operation.html"><i class="layui-icon layui-icon-log"></i><cite>日志管理</cite></a>
+                </li>
+            </ul>
+            <ul class="layui-nav layui-layout-right">
+                <li style="line-height:56px;padding-right:8px;">
+                    <a class="theme-toggle" id="theme-toggle" href="javascript:;" title="切换主题">
+                        <i class="layui-icon layui-icon-moon"></i>
+                    </a>
+                </li>
+                <li class="layui-nav-item">
+                    <a href="javascript:;">
+                        <img src="https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxko.png" class="layui-nav-img">
+                        <span id="username">Admin</span>
+                    </a>
+                    <dl class="layui-nav-child">
+                        <dd><a href="/pages/dashboard/profile.html">个人中心</a></dd>
+                        <dd><a href="javascript:;" id="btn-password">修改密码</a></dd>
+                        <hr>
+                        <dd><a href="javascript:;" id="btn-logout" style="color: #ff4d4f;">退出登录</a></dd>
+                    </dl>
+                </li>
+            </ul>
+        </div>
+
+        <!-- 左侧菜单 -->
+        <div class="layui-side layui-side-menu">
+            <div class="layui-side-scroll">
+                <ul class="sidebar-menu">
+                    <li class="sidebar-menu-item active" data-page="index">
+                        <a href="/pages/dashboard/index.html"><i class="layui-icon layui-icon-chart"></i> 首页概览</a>
+                    </li>
+                    <li class="sidebar-menu-item" data-page="notifications">
+                        <a href="/pages/dashboard/notifications.html"><i class="layui-icon layui-icon-notice"></i> 我的通知</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 主体内容 -->
+        <div class="layui-body">
+            <div class="layui-fluid" id="content-area">
+                <div class="welcome-box">
+                    <h2>欢迎回来，<span id="welcome-user">Admin</span></h2>
+                    <p id="welcome-date"></p>
+                </div>
+                <div class="stat-cards">
+                    <div class="stat-card">
+                        <div class="stat-icon blue"><i class="layui-icon layui-icon-username"></i></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-users">-</div>
+                            <div class="stat-label">用户总数</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon green"><i class="layui-icon layui-icon-group"></i></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-roles">-</div>
+                            <div class="stat-label">角色总数</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon orange"><i class="layui-icon layui-icon-log"></i></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-logs">-</div>
+                            <div class="stat-label">今日日志</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon purple"><i class="layui-icon layui-icon-notice"></i></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-notifications">-</div>
+                            <div class="stat-label">未读通知</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="admin-card" style="margin-bottom:16px;">
+                    <div class="admin-card-title">快捷入口</div>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                        <a href="/pages/system/users.html" class="layui-btn layui-btn-normal layui-btn-sm"><i class="layui-icon layui-icon-username"></i> 用户管理</a>
+                        <a href="/pages/system/roles.html" class="layui-btn layui-btn-normal layui-btn-sm"><i class="layui-icon layui-icon-group"></i> 角色管理</a>
+                        <a href="/pages/system/tasks.html" class="layui-btn layui-btn-normal layui-btn-sm"><i class="layui-icon layui-icon-time"></i> 定时任务</a>
+                        <a href="/pages/system/settings.html" class="layui-btn layui-btn-normal layui-btn-sm"><i class="layui-icon layui-icon-set"></i> 系统设置</a>
+                    </div>
+                </div>
+                <div class="admin-card">
+                    <div class="admin-card-title">最近操作日志</div>
+                    <table class="layui-table" lay-size="sm">
+                        <thead><tr><th>用户</th><th>操作</th><th>IP</th><th>时间</th></tr></thead>
+                        <tbody id="recent-logs"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/layui/layui.js"></script>
+    <script src="/js/common.js"></script>
+    <script>
+    layui.use(['element', 'layer', 'table', 'form'], function(){
+        var element = layui.element;
+        var layer = layui.layer;
+
+        // 检查登录
+        if (!checkAuth()) return;
+
+        // 加载用户信息
+        loadCurrentUser().then(function(user) {
+            if (user) {
+                document.getElementById('welcome-user').textContent = user.username;
+            }
+        });
+
+        // 显示日期
+        document.getElementById('welcome-date').textContent = '今天是 ' + new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }) + '，祝您工作愉快！';
+
+        // 加载统计数据
+        request('/dashboard/stats').then(function(res) {
+            if (res && res.code === 0 && res.data) {
+                var stats = res.data;
+                if (stats.users) document.getElementById('stat-users').textContent = stats.users.total || 0;
+                if (stats.roles) document.getElementById('stat-roles').textContent = stats.roles.total || 0;
+                if (stats.logs_today !== undefined) document.getElementById('stat-logs').textContent = stats.logs_today;
+                if (stats.notifications) document.getElementById('stat-notifications').textContent = stats.notifications.unread || 0;
+            }
+        });
+
+        // 加载最近日志
+        request('/dashboard/recent-logs').then(function(res) {
+            if (res && res.code === 0 && res.data && res.data.items) {
+                var tbody = document.getElementById('recent-logs');
+                var html = '';
+                res.data.items.forEach(function(log) {
+                    html += '<tr><td>' + esc(log.username || '-') + '</td>';
+                    html += '<td>' + esc(log.action || '-') + '</td>';
+                    html += '<td>' + esc(log.ip || '-') + '</td>';
+                    html += '<td>' + esc(log.created_at || '-') + '</td></tr>';
+                });
+                tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;color:#999;">暂无数据</td></tr>';
+            }
+        });
+
+        // 主题切换
+        document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+        // 更新图标
+        if (document.documentElement.classList.contains('dark-mode')) {
+            document.getElementById('theme-toggle').innerHTML = '<i class="layui-icon layui-icon-light"></i>';
+        }
+
+        // 退出登录
+        document.getElementById('btn-logout').addEventListener('click', function() {
+            layer.confirm('确定要退出登录吗？', function(idx) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                layer.close(idx);
+                window.location.href = '/login';
+            });
+        });
+
+        // 修改密码
+        document.getElementById('btn-password').addEventListener('click', function() {
+            layer.prompt({ formType: 1, title: '修改密码 - 请输入新密码' }, function(pass, idx) {
+                layer.close(idx);
+                layer.prompt({ formType: 1, title: '请确认密码' }, function(pass2, idx2) {
+                    if (pass !== pass2) {
+                        layer.msg('两次密码不一致', {icon: 2});
+                        layer.close(idx2);
+                        return;
+                    }
+                    layer.close(idx2);
+                    // 这里需要用户输入旧密码，简化处理
+                    layer.msg('密码修改功能请使用个人中心', {icon: 0});
+                });
+            });
+        });
+    });
+    </script>
+</body>
+</html>

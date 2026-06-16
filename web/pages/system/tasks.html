@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>定时任务 - Gai Admin</title>
+    <link rel="stylesheet" href="/layui/css/layui.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="layui-layout-body">
+    <div class="layui-layout layui-layout-admin">
+        <div class="layui-header">
+            <div class="layui-logo"><div class="logo-icon"><i class="layui-icon layui-icon-home"></i></div><span>Gai Admin</span></div>
+            <ul class="layui-nav top-menu">
+                <li class="layui-nav-item"><a href="/pages/dashboard/index.html"><i class="layui-icon layui-icon-chart"></i><cite>数据看板</cite></a></li>
+                <li class="layui-nav-item layui-this"><a href="/pages/system/users.html"><i class="layui-icon layui-icon-set"></i><cite>系统管理</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/data/export.html"><i class="layui-icon layui-icon-table"></i><cite>数据管理</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/logs/operation.html"><i class="layui-icon layui-icon-log"></i><cite>日志管理</cite></a></li>
+            </ul>
+            <ul class="layui-nav layui-layout-right">
+                <li style="line-height:56px;padding-right:8px;">
+                    <a class="theme-toggle" id="theme-toggle" href="javascript:;" title="切换主题">
+                        <i class="layui-icon layui-icon-moon"></i>
+                    </a>
+                </li>
+                <li class="layui-nav-item"><a href="javascript:;"><img src="https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxko.png" class="layui-nav-img"><span id="username">Admin</span></a>
+                    <dl class="layui-nav-child"><dd><a href="javascript:;" id="btn-logout" style="color:#ff4d4f;">退出登录</a></dd></dl>
+                </li>
+            </ul>
+        </div>
+        <div class="layui-side layui-side-menu">
+            <div class="layui-side-scroll">
+                <ul class="sidebar-menu">
+                    <li class="sidebar-menu-item"><a href="/pages/system/users.html"><i class="layui-icon layui-icon-username"></i> 用户管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/roles.html"><i class="layui-icon layui-icon-group"></i> 角色管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/menus.html"><i class="layui-icon layui-icon-menu-fill"></i> 菜单管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/permissions.html"><i class="layui-icon layui-icon-auz"></i> 权限管理</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/uploads.html"><i class="layui-icon layui-icon-picture"></i> 文件管理</a></li>
+                    <li class="sidebar-menu-item active"><a href="/pages/system/tasks.html"><i class="layui-icon layui-icon-time"></i> 定时任务</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/system/settings.html"><i class="layui-icon layui-icon-set"></i> 系统设置</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="layui-body">
+            <div class="layui-fluid">
+                <div class="search-bar">
+                    <div class="layui-form layui-inline">
+                        <div class="layui-inline"><button class="layui-btn layui-btn-normal" id="btn-add"><i class="layui-icon layui-icon-add-1"></i> 新增任务</button></div>
+                    </div>
+                </div>
+                <div class="admin-card"><table class="layui-hide" id="data-table" lay-filter="data-table"></table></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/html" id="status-tpl">
+        {{# if(d.status === 'enabled'){ }}
+        <span class="layui-badge layui-bg-green">启用</span>
+        {{# } else { }}
+        <span class="layui-badge layui-bg-gray">禁用</span>
+        {{# } }}
+    </script>
+    <script type="text/html" id="toolbar-tpl">
+        <a class="layui-btn layui-btn-xs" lay-event="toggle">{{ d.status === 'enabled' ? '禁用' : '启用' }}</a>
+        <a class="layui-btn layui-btn-normal layui-btn-xs" lay-event="run">执行</a>
+        <a class="layui-btn layui-btn-xs" lay-event="edit">编辑</a>
+        <a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>
+    </script>
+
+    <script src="/layui/layui.js"></script>
+    <script src="/js/common.js"></script>
+    <script>
+    layui.use(['element', 'layer', 'table', 'form'], function(){
+        var table = layui.table, layer = layui.layer, form = layui.form;
+        if (!checkAuth()) return;
+        loadCurrentUser();
+
+        table.render({
+            elem: '#data-table',
+            url: API_BASE + '/scheduled-tasks',
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+            page: true,
+            limit: 20,
+            cols: [[
+                { field: 'id', title: 'ID', width: 60 },
+                { field: 'name', title: '任务名称', minWidth: 150 },
+                { field: 'cron_expr', title: 'Cron表达式', width: 120 },
+                { field: 'command', title: '处理器', width: 150 },
+                { field: 'status', title: '状态', width: 80, templet: '#status-tpl' },
+                { field: 'last_run_at', title: '上次执行', width: 160 },
+                { title: '操作', width: 200, toolbar: '#toolbar-tpl' }
+            ]],
+            parseData: function(res){ return { code: res.code === 0 ? 0 : res.code, msg: res.message, count: res.data ? res.data.total : 0, data: res.data ? (res.data.items || res.data.list || []) : [] }; }
+        });
+
+        document.getElementById('btn-add').addEventListener('click', function(){ openForm('新增任务', {}); });
+
+        table.on('tool(data-table)', function(obj){
+            var data = obj.data;
+            if (obj.event === 'edit') { openForm('编辑任务', data); }
+            else if (obj.event === 'del') {
+                layer.confirm('确定删除该任务？', function(idx){
+                    request('/scheduled-tasks/' + data.id, { method: 'DELETE' }).then(function(res){
+                        if (res.code === 0) { showSuccess('删除成功'); obj.del(); } else { showError(res.message); }
+                        layer.close(idx);
+                    });
+                });
+            } else if (obj.event === 'toggle') {
+                request('/scheduled-tasks/' + data.id + '/toggle', { method: 'POST' }).then(function(res){
+                    if (res.code === 0) { showSuccess('操作成功'); table.reload('data-table'); } else { showError(res.message); }
+                });
+            } else if (obj.event === 'run') {
+                layer.confirm('确定立即执行该任务？', function(idx){
+                    layer.close(idx);
+                    request('/scheduled-tasks/' + data.id + '/run', { method: 'POST' }).then(function(res){
+                        if (res.code === 0) { showSuccess('任务已触发执行'); } else { showError(res.message); }
+                    });
+                });
+            }
+        });
+
+        function openForm(title, data){
+            var html = '<form class="layui-form" lay-filter="form" style="padding:20px;">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">名称</label><div class="layui-input-block"><input type="text" name="name" value="' + esc(data.name || '') + '" class="layui-input" required></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">Cron</label><div class="layui-input-block"><input type="text" name="cron_expr" value="' + esc(data.cron_expr || '') + '" class="layui-input" placeholder="*/5 * * * *"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">处理器</label><div class="layui-input-block"><input type="text" name="command" value="' + esc(data.command || '') + '" class="layui-input" placeholder="如: cleanup_logs"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">参数</label><div class="layui-input-block"><textarea name="params" class="layui-textarea">' + esc(data.params || '') + '</textarea></div></div>';
+            html += '</form>';
+            layer.open({
+                type: 1, title: title, area: ['450px'], content: html, btn: ['保存', '取消'],
+                success: function(){ form.render(); },
+                yes: function(index){
+                    var formData = {};
+                    document.querySelectorAll('form [name]').forEach(function(el){ formData[el.name] = el.value; });
+                    var url = data.id ? '/scheduled-tasks/' + data.id : '/scheduled-tasks';
+                    request(url, { method: data.id ? 'PUT' : 'POST', body: JSON.stringify(formData) }).then(function(res){
+                        if (res.code === 0) { showSuccess('保存成功'); layer.close(index); table.reload('data-table'); }
+                        else { showError(res.message); }
+                    });
+                }
+            });
+        }
+
+        // 主题切换
+        document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+        if (document.documentElement.classList.contains('dark-mode')) {
+            document.getElementById('theme-toggle').innerHTML = '<i class="layui-icon layui-icon-light"></i>';
+        }
+
+        document.getElementById('btn-logout').addEventListener('click', function(){
+            layer.confirm('确定退出登录？', function(idx){ localStorage.removeItem('token'); window.location.href = '/login'; });
+        });
+    });
+    </script>
+</body>
+</html>

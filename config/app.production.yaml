@@ -1,0 +1,45 @@
+# 生产环境配置示例
+# 复制此文件为 app.yaml 并修改相应配置
+# 或使用环境变量覆盖
+
+name: admin-system
+port: 8080
+env: production
+debug: false
+
+database:
+  # 生产环境推荐使用 MySQL 或 PostgreSQL
+  driver: ${DB_DRIVER:mysql}
+  # MySQL DSN 示例
+  # dsn: ${DB_DSN:user:password@tcp(localhost:3306)/admin_system?charset=utf8mb4&parseTime=True&loc=Local}
+  # PostgreSQL DSN 示例
+  # dsn: ${DB_DSN:host=localhost port=5432 user=admin password=secret dbname=admin_system sslmode=disable}
+  dsn: ${DB_DSN}
+
+auth:
+  default: jwt
+  guards:
+    jwt:
+      driver: jwt
+      # 生产环境必须设置强密钥（至少32字符）
+      secret: ${JWT_SECRET}
+      # Token 有效期（秒），生产环境建议缩短
+      ttl: ${JWT_TTL:3600}
+
+log:
+  # 生产环境日志级别
+  level: ${LOG_LEVEL:warn}
+  format: json
+  file: ${LOG_FILE:storage/logs/app.log}
+  # 生产环境可关闭请求日志以提升性能
+  requests: ${LOG_REQUESTS:false}
+
+# 生产环境建议的环境变量配置：
+# export APP_ENV=production
+# export APP_DEBUG=false
+# export DB_DRIVER=mysql
+# export DB_DSN="user:password@tcp(localhost:3306)/admin_system?charset=utf8mb4&parseTime=True&loc=Local"
+# export JWT_SECRET="your-strong-secret-key-at-least-32-characters"
+# export JWT_TTL=3600
+# export LOG_LEVEL=warn
+# export LOG_REQUESTS=false

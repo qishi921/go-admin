@@ -1,0 +1,48 @@
+model: OperationLog
+table: operation_logs
+fields:
+  - name: user_id
+    type: int
+    nullable: true
+  - name: username
+    type: string
+    size: 50
+    nullable: true
+  - name: action
+    type: string
+    size: 50
+    rules: required
+  - name: method
+    type: string
+    size: 10
+    nullable: true
+  - name: path
+    type: string
+    size: 255
+    nullable: true
+  - name: ip
+    type: string
+    size: 45
+    nullable: true
+  - name: user_agent
+    type: string
+    size: 500
+    nullable: true
+  - name: params
+    type: text
+    nullable: true
+  - name: result
+    type: text
+    nullable: true
+  - name: duration
+    type: int
+    default: "0"
+  - name: status
+    type: enum
+    values: [success, failed]
+    default: "'success'"
+
+api:
+  prefix: /api/v1/logs
+  actions: [index, show]
+  auth: jwt

@@ -1,0 +1,60 @@
+# 构建产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+admin-system
+
+# 测试文件
+*.test
+*.out
+coverage.txt
+
+# Go 相关
+go.work
+go.work.sum
+
+# IDE 相关
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 环境变量文件（包含敏感信息）
+.env
+.env.local
+.env.*.local
+
+# 日志和临时文件
+storage/logs/*.log
+*.log
+*.tmp
+
+# 上传文件（不应包含在镜像中）
+storage/uploads/*
+
+# SQLite 数据库（生产环境使用外部数据库）
+storage/database/*.db
+
+# 前端构建产物（如果单独构建）
+node_modules/
+npm-debug.log*
+
+# macOS 特有
+.DS_Store
+
+# Git 相关
+.git/
+.gitignore
+
+# 文档
+*.md
+docs/
+
+# 测试覆盖率
+coverage.html
+
+# 其他
+.claude/

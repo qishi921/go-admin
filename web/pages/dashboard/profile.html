@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人中心 - Gai Admin</title>
+    <link rel="stylesheet" href="/layui/css/layui.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="layui-layout-body">
+    <div class="layui-layout layui-layout-admin">
+        <div class="layui-header">
+            <div class="layui-logo"><div class="logo-icon"><i class="layui-icon layui-icon-home"></i></div><span>Gai Admin</span></div>
+            <ul class="layui-nav top-menu">
+                <li class="layui-nav-item layui-this"><a href="/pages/dashboard/index.html"><i class="layui-icon layui-icon-chart"></i><cite>数据看板</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/system/users.html"><i class="layui-icon layui-icon-set"></i><cite>系统管理</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/data/export.html"><i class="layui-icon layui-icon-table"></i><cite>数据管理</cite></a></li>
+                <li class="layui-nav-item"><a href="/pages/logs/operation.html"><i class="layui-icon layui-icon-log"></i><cite>日志管理</cite></a></li>
+            </ul>
+            <ul class="layui-nav layui-layout-right">
+                <li style="line-height:56px;padding-right:8px;">
+                    <a class="theme-toggle" id="theme-toggle" href="javascript:;" title="切换主题">
+                        <i class="layui-icon layui-icon-moon"></i>
+                    </a>
+                </li>
+                <li class="layui-nav-item"><a href="javascript:;"><img src="https://gw.alipayobjects.com/zos/rmsportal/BiazfanxmamNRoxxVxko.png" class="layui-nav-img"><span id="username">Admin</span></a>
+                    <dl class="layui-nav-child"><dd><a href="/pages/dashboard/profile.html">个人中心</a></dd><dd><a href="javascript:;" id="btn-logout" style="color:#ff4d4f;">退出登录</a></dd></dl>
+                </li>
+            </ul>
+        </div>
+        <div class="layui-side layui-side-menu">
+            <div class="layui-side-scroll">
+                <ul class="sidebar-menu">
+                    <li class="sidebar-menu-item"><a href="/pages/dashboard/index.html"><i class="layui-icon layui-icon-chart"></i> 首页概览</a></li>
+                    <li class="sidebar-menu-item"><a href="/pages/dashboard/notifications.html"><i class="layui-icon layui-icon-notice"></i> 我的通知</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="layui-body">
+            <div class="layui-fluid">
+                <div class="admin-card">
+                    <div class="admin-card-title">个人中心</div>
+                    <div style="padding:20px;max-width:500px;">
+                        <form class="layui-form" lay-filter="profile-form">
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">用户名</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="username" id="form-username" class="layui-input" disabled>
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">邮箱</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="email" id="form-email" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">电话</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="phone" id="form-phone" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">真实姓名</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="real_name" id="form-realname" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <div class="layui-input-block">
+                                    <button class="layui-btn layui-btn-normal" id="btn-save">保存修改</button>
+                                    <button type="button" class="layui-btn layui-btn-primary" id="btn-change-pwd">修改密码</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/layui/layui.js"></script>
+    <script src="/js/common.js"></script>
+    <script>
+    layui.use(['element', 'layer', 'form'], function(){
+        var layer = layui.layer, form = layui.form;
+        if (!checkAuth()) return;
+
+        // 加载用户信息
+        loadCurrentUser().then(function(user){
+            if (user) {
+                document.getElementById('form-username').value = user.username || '';
+                document.getElementById('form-email').value = user.email || '';
+                document.getElementById('form-phone').value = user.phone || '';
+                document.getElementById('form-realname').value = user.real_name || '';
+            }
+        });
+
+        // 保存个人信息
+        document.getElementById('btn-save').addEventListener('click', function(){
+            var data = {
+                email: document.getElementById('form-email').value,
+                phone: document.getElementById('form-phone').value,
+                real_name: document.getElementById('form-realname').value
+            };
+
+            request('/auth/me', { method: 'PUT', body: JSON.stringify(data) }).then(function(res){
+                if (res.code === 0) { showSuccess('保存成功'); loadCurrentUser(); }
+                else { showError(res.message || '保存失败'); }
+            });
+        });
+
+        // 修改密码
+        document.getElementById('btn-change-pwd').addEventListener('click', function(){
+            var html = '<form class="layui-form" style="padding:20px;">';
+            html += '<div class="layui-form-item"><label class="layui-form-label">旧密码</label><div class="layui-input-block"><input type="password" name="old_password" class="layui-input" required></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">新密码</label><div class="layui-input-block"><input type="password" name="new_password" class="layui-input" required placeholder="至少8位，包含字母和数字"></div></div>';
+            html += '<div class="layui-form-item"><label class="layui-form-label">确认密码</label><div class="layui-input-block"><input type="password" name="confirm_password" class="layui-input" required></div></div>';
+            html += '</form>';
+
+            layer.open({
+                type: 1, title: '修改密码', area: ['400px'], content: html, btn: ['确定', '取消'],
+                yes: function(index){
+                    var oldPwd = document.querySelector('input[name="old_password"]').value;
+                    var newPwd = document.querySelector('input[name="new_password"]').value;
+                    var confirmPwd = document.querySelector('input[name="confirm_password"]').value;
+
+                    if (!oldPwd || !newPwd) { showError('请填写完整信息'); return; }
+                    if (newPwd !== confirmPwd) { showError('两次密码不一致'); return; }
+                    if (newPwd.length < 8) { showError('密码至少8位'); return; }
+                    if (!/[a-zA-Z]/.test(newPwd) || !/[0-9]/.test(newPwd)) { showError('密码必须包含字母和数字'); return; }
+
+                    request('/auth/password', { method: 'PUT', body: JSON.stringify({ old_password: oldPwd, new_password: newPwd }) }).then(function(res){
+                        if (res.code === 0) {
+                            showSuccess('密码修改成功，请重新登录');
+                            setTimeout(function(){
+                                localStorage.removeItem('token');
+                                window.location.href = '/login';
+                            }, 1500);
+                        } else { showError(res.message || '修改失败'); }
+                    });
+                }
+            });
+        });
+
+        // 主题切换
+        document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+        if (document.documentElement.classList.contains('dark-mode')) {
+            document.getElementById('theme-toggle').innerHTML = '<i class="layui-icon layui-icon-light"></i>';
+        }
+
+        document.getElementById('btn-logout').addEventListener('click', function(){
+            layer.confirm('确定退出登录？', function(idx){ localStorage.removeItem('token'); window.location.href = '/login'; });
+        });
+    });
+    </script>
+</body>
+</html>
